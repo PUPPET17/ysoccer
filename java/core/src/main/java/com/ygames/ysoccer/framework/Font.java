@@ -1,10 +1,16 @@
 package com.ygames.ysoccer.framework;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.files.FileHandle;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureFilter;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -33,6 +39,10 @@ public class Font {
     private int[] widths = new int[1024];
 
     private TextureRegion[] regions = new TextureRegion[1024];
+
+    private BitmapFont localizedFont;
+
+    private final GlyphLayout glyphLayout = new GlyphLayout();
 
     public Font(int size, int columnWidth, int rowHeight, int regionWidth, int regionHeight) {
         this.size = size;
@@ -80,6 +90,45 @@ public class Font {
         for (int i = 0; i < 1024; i++) {
             regions[i] = new TextureRegion(texture, (i & 0x3F) * columnWidth, (i >> 6) * rowHeight, regionWidth, regionHeight);
             regions[i].flip(false, true);
+        }
+
+        loadLocalizedFont();
+    }
+
+    /**
+     * Loads a compact CJK font used only when a string contains glyphs that are
+     * unavailable in the original 1024-character pixel atlas. Keeping the
+     * existing atlas as the default preserves the game's established visual
+     * style for team names, scores and the other bundled translations.
+     */
+    private void loadLocalizedFont() {
+        FileHandle fontFile = Gdx.files.internal("fonts/noto_sans_sc_ysoccer.ttf");
+        FileHandle chineseStrings = Gdx.files.internal("i18n/strings_zh.properties");
+        if (size < 10 || !fontFile.exists() || !chineseStrings.exists()) {
+            return;
+        }
+
+        FreeTypeFontGenerator generator = new FreeTypeFontGenerator(fontFile);
+        try {
+            FreeTypeFontGenerator.FreeTypeFontParameter parameter = new FreeTypeFontGenerator.FreeTypeFontParameter();
+            parameter.size = size;
+            parameter.characters = chineseStrings.readString("UTF-8");
+            parameter.flip = true;
+            parameter.borderWidth = 1;
+            if (rgbPair != null) {
+                parameter.color = new Color(
+                    ((rgbPair.rgbNew >> 16) & 0xFF) / 255f,
+                    ((rgbPair.rgbNew >> 8) & 0xFF) / 255f,
+                    (rgbPair.rgbNew & 0xFF) / 255f,
+                    1f
+                );
+            }
+            parameter.minFilter = TextureFilter.Nearest;
+            parameter.magFilter = TextureFilter.Nearest;
+            localizedFont = generator.generateFont(parameter);
+            localizedFont.setUseIntegerPositions(true);
+        } finally {
+            generator.dispose();
         }
     }
 
@@ -146,6 +195,11 @@ public class Font {
     }
 
     public void draw(SpriteBatch batch, String text, int x, int y, Align align) {
+        if (usesLocalizedFont(text)) {
+            drawLocalized(batch, text, x, y, align);
+            return;
+        }
+
         int w = textWidth(text);
 
         // x position
@@ -179,11 +233,32 @@ public class Font {
         }
     }
 
+    private void drawLocalized(SpriteBatch batch, String text, int x, int y, Align align) {
+        int w = textWidth(text);
+        switch (align) {
+            case RIGHT:
+                x = x - w;
+                break;
+            case CENTER:
+                x = x - w / 2;
+                break;
+            case LEFT:
+                break;
+        }
+
+        localizedFont.draw(batch, text, x, y);
+    }
+
     public void draw(SpriteBatch batch, int i, int x, int y, Align align) {
         draw(batch, "" + i, x, y, align);
     }
 
     public int textWidth(String text) {
+        if (usesLocalizedFont(text)) {
+            glyphLayout.setText(localizedFont, text);
+            return Math.round(glyphLayout.width);
+        }
+
         int w = 0;
         for (int i = 0; i < text.length(); i++) {
             int c = text.charAt(i);
@@ -202,5 +277,19 @@ public class Font {
             w = w + widths[c];
         }
         return w;
+    }
+
+    private boolean usesLocalizedFont(String text) {
+        if (localizedFont == null) {
+            return false;
+        }
+
+        for (int i = 0; i < text.length(); i++) {
+            char character = text.charAt(i);
+            if (character >= regions.length && localizedFont.getData().hasGlyph(character)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -75,6 +75,13 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
     abstract public void render();
 
     public void resize(int width, int height) {
+        // A minimized LWJGL window temporarily has a zero-sized framebuffer.
+        // Keep the previous camera and HUD dimensions until the window is
+        // restored, because width is also the divisor for the HUD aspect ratio.
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
         screenWidth = width;
         screenHeight = height;
         float zoomMin = width / (VISIBLE_FIELD_WIDTH_MAX * 2 * Const.TOUCH_LINE);

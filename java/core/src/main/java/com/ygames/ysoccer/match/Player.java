@@ -147,6 +147,9 @@ public class Player implements Json.Serializable {
 
     @Override
     public void read(Json json, JsonValue jsonData) {
+        // Older custom team files persisted the former lineup index. The current
+        // lineup derives this value from player order, so discard the legacy field.
+        jsonData.remove("index");
         json.readFields(this, jsonData);
     }
 

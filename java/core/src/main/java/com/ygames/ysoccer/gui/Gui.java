@@ -22,6 +22,13 @@ public class Gui {
     public final TextureRegion[] penaltyCards = new TextureRegion[3];
 
     public void resize(int width, int height) {
+        // LWJGL reports a zero-sized framebuffer while the desktop window is
+        // minimized. Retain the last usable layout until positive dimensions
+        // arrive instead of deriving an invalid GUI scale from zero.
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
         float wZoom = (float) width / WIDTH;
         float hZoom = (float) height / HEIGHT;
         zoom = Math.min(wZoom, hZoom);
