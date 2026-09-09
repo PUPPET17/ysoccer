@@ -1,11 +1,11 @@
 package com.ygames.ysoccer.screens;
 
+import com.badlogic.gdx.Input;
 import com.strongjoshua.console.Console;
 import com.strongjoshua.console.GUIConsole;
 import com.ygames.ysoccer.framework.Assets;
 import com.ygames.ysoccer.framework.GLGame;
 import com.ygames.ysoccer.framework.GLScreen;
-import com.ygames.ysoccer.framework.Settings;
 import com.ygames.ysoccer.match.Player;
 import com.ygames.ysoccer.match.Training;
 import com.ygames.ysoccer.match.TrainingConsoleCommandExecutor;
@@ -44,14 +44,13 @@ class TrainingScreen extends GLScreen {
             }
         };
 
-        if (Settings.development) {
-            console = new GUIConsole();
-            console.setSizePercent(25, 100);
-            console.setPositionPercent(0, 0);
-            console.setHoverAlpha(0.9f);
-            console.setNoHoverAlpha(0.9f);
-            console.setCommandExecutor(new TrainingConsoleCommandExecutor(training));
-        }
+        console = new GUIConsole();
+        console.setDisplayKeyID(Input.Keys.F5);
+        console.setSizePercent(25, 100);
+        console.setPositionPercent(0, 0);
+        console.setHoverAlpha(0.9f);
+        console.setNoHoverAlpha(0.9f);
+        console.setCommandExecutor(new TrainingConsoleCommandExecutor(training));
     }
 
     @Override
@@ -73,10 +72,8 @@ class TrainingScreen extends GLScreen {
             trainingRenderer.render();
         }
 
-        if (Settings.development) {
-            console.draw();
-            paused = console.isVisible();
-        }
+        console.draw();
+        paused = console.isVisible();
     }
 
     @Override
@@ -85,9 +82,7 @@ class TrainingScreen extends GLScreen {
 
         trainingRenderer.resize(width, height);
 
-        if (Settings.development) {
-            console.refresh();
-        }
+        console.refresh();
     }
 
     private void quit() {

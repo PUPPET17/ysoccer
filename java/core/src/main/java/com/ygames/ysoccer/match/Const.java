@@ -17,6 +17,32 @@ public class Const {
     static float PASSING_SPEED_FACTOR = 0.3f;
     static float SHOOTING_ANGLE_TOLERANCE = 22.5f;
 
+    /** Global multiplier applied to every player's running speed. */
+    static final float PLAYER_MOVEMENT_SPEED_FACTOR = 0.8f;
+
+    /** Original game's maximum close-control distance, in pitch pixels. */
+    static final float ORIGINAL_DRIBBLE_CONTROL_DISTANCE = 9f;
+
+    /** Runtime-adjustable maximum distance at which an owner can guide the ball. */
+    static float DRIBBLE_CONTROL_DISTANCE = 12f;
+
+    /**
+     * Original game's possession-release distance, in pitch pixels.
+     */
+    static final float ORIGINAL_BALL_OWNER_RELEASE_DISTANCE = 11f;
+
+    /**
+     * Runtime-adjustable distance beyond which normal possession is released. The margin
+     * above the control distance prevents ownership from flickering at the control boundary.
+     */
+    static float BALL_OWNER_RELEASE_DISTANCE = 15f;
+
+    /** Original game's fractional running-speed reduction while carrying the ball (10%). */
+    static final float ORIGINAL_POSSESSION_SPEED_PENALTY = 0.1f;
+
+    /** Runtime-adjustable fractional running-speed reduction while carrying the ball. */
+    static float POSSESSION_SPEED_PENALTY = 0.05f;
+
     static final int REPLAY_DURATION = 8; // seconds
     static final int REPLAY_FRAMES = REPLAY_DURATION * GLGame.VIRTUAL_REFRESH_RATE;
     static final int REPLAY_SUBFRAMES = REPLAY_DURATION * SECOND;

@@ -76,7 +76,8 @@ public class Training extends Scene<TrainingFsm, TrainingState> {
 
     private void updateBallOwner() {
         if (ball.owner != null) {
-            if ((ball.owner.ballDistance > 11) || (ball.z > (Const.PLAYER_H + BALL_R))) {
+            if ((ball.owner.ballDistance > Const.BALL_OWNER_RELEASE_DISTANCE)
+                || (ball.z > (Const.PLAYER_H + BALL_R))) {
                 setBallOwner(null);
             }
         }

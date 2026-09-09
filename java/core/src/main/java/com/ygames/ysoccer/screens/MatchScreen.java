@@ -1,6 +1,7 @@
 package com.ygames.ysoccer.screens;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.strongjoshua.console.Console;
 import com.strongjoshua.console.GUIConsole;
 import com.ygames.ysoccer.framework.Assets;
@@ -49,14 +50,13 @@ class MatchScreen extends GLScreen {
             }
         };
 
-        if (Settings.development) {
-            console = new GUIConsole();
-            console.setSizePercent(25, 100);
-            console.setPositionPercent(0, 0);
-            console.setHoverAlpha(0.9f);
-            console.setNoHoverAlpha(0.9f);
-            console.setCommandExecutor(new MatchConsoleCommandExecutor(match));
-        }
+        console = new GUIConsole();
+        console.setDisplayKeyID(Input.Keys.F5);
+        console.setSizePercent(25, 100);
+        console.setPositionPercent(0, 0);
+        console.setHoverAlpha(0.9f);
+        console.setNoHoverAlpha(0.9f);
+        console.setCommandExecutor(new MatchConsoleCommandExecutor(match));
     }
 
     @Override
@@ -78,7 +78,7 @@ class MatchScreen extends GLScreen {
             matchRenderer.render();
         }
 
-        if (!matchEnded && Settings.development) {
+        if (!matchEnded) {
             console.draw();
             matchPaused = console.isVisible();
         }
@@ -96,9 +96,7 @@ class MatchScreen extends GLScreen {
 
         matchRenderer.resize(width, height);
 
-        if (Settings.development) {
-            console.refresh();
-        }
+        console.refresh();
     }
 
     private void quit(boolean matchCompleted) {

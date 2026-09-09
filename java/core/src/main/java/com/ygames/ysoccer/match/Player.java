@@ -678,7 +678,7 @@ public class Player implements Json.Serializable {
         // physical parameters
         // speeds are in pixel/s
         // TODO: change in function of time and stamina
-        speed = 130 + 4 * skills.speed;
+        speed = (130 + 4 * skills.speed) * Const.PLAYER_MOVEMENT_SPEED_FACTOR;
 
         // store old values
         x0 = x;
