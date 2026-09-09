@@ -12,11 +12,11 @@ public abstract class InputDevice {
 
     // new values
     public int x0, y0;
-    public boolean fire10, fire20;
+    public boolean fire10, fire20, fire30;
 
     // valid values
     public int x1, y1;
-    public boolean fire11, fire21;
+    public boolean fire11, fire21, fire31;
     public boolean value;
     public int angle;
 
@@ -38,6 +38,7 @@ public abstract class InputDevice {
         y1 = y0;
         fire11 = fire10;
         fire21 = fire20;
+        fire31 = fire30;
 
         // read new values
         read();
@@ -66,6 +67,15 @@ public abstract class InputDevice {
 
     public boolean fire2Down() {
         return fire20 && !fire21;
+    }
+
+    /**
+     * Reports a new press of the dedicated player-switch action.
+     *
+     * @return true only on the input frame where the third action button is pressed
+     */
+    public boolean fire3Down() {
+        return fire30 && !fire31;
     }
 
     public boolean xReleased() {

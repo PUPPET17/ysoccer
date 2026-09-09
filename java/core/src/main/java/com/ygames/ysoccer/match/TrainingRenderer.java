@@ -243,8 +243,10 @@ public class TrainingRenderer extends SceneRenderer<Training> {
                 int len = scene.team[t].lineup.size();
                 for (int i = 0; i < len; i++) {
                     Player player = scene.team[t].lineup.get(i);
-                    if ((player.inputDevice != player.ai && player.isVisible)
-                        || (Settings.development && Settings.showPlayerNumber)) {
+                    if (player.inputDevice != player.ai && player.isVisible) {
+                        drawControlledPlayerMarker(player);
+                        drawPlayerNumber(player);
+                    } else if (Settings.development && Settings.showPlayerNumber) {
                         drawPlayerNumber(player);
                     }
                 }

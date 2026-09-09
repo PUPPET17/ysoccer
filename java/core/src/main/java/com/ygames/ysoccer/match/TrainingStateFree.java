@@ -5,8 +5,11 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.math.Vector2;
 import com.ygames.ysoccer.framework.EMath;
 import com.ygames.ysoccer.framework.GLGame;
+import com.ygames.ysoccer.framework.InputDevice;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import static com.badlogic.gdx.Input.Keys.ESCAPE;
 import static com.ygames.ysoccer.match.Const.BALL_R;
@@ -29,6 +32,7 @@ class TrainingStateFree extends TrainingState {
 
     private Player lastTrained;
     private final Player[] keepers;
+    private final ManualPlayerSwitcher manualPlayerSwitcher;
 
     TrainingStateFree(TrainingFsm fsm) {
         super(FREE, fsm);
@@ -36,6 +40,7 @@ class TrainingStateFree extends TrainingState {
         displayControlledPlayer = true;
 
         keepers = new Player[]{null, null};
+        manualPlayerSwitcher = new ManualPlayerSwitcher();
     }
 
     @Override
@@ -47,6 +52,13 @@ class TrainingStateFree extends TrainingState {
         scene.resetData();
 
         lastTrained = team[HOME].lineup.get(0);
+        manualPlayerSwitcher.reset();
+    }
+
+    @Override
+    void exitActions() {
+        super.exitActions();
+        manualPlayerSwitcher.reset();
     }
 
     @Override
@@ -55,6 +67,8 @@ class TrainingStateFree extends TrainingState {
 
         float timeLeft = deltaTime;
         while (timeLeft >= GLGame.SUBFRAME_DURATION) {
+
+            manualPlayerSwitcher.update();
 
             if (scene.subframe % GLGame.SUBFRAMES == 0) {
                 scene.updateFrameDistance();
@@ -106,38 +120,26 @@ class TrainingStateFree extends TrainingState {
             timeLeft -= GLGame.SUBFRAME_DURATION;
         }
 
-        if ((ball.owner != null) && (ball.owner != lastTrained)) {
+        if ((ball.owner != null)
+            && (ball.owner != lastTrained)
+            && ball.owner.role == GOALKEEPER) {
 
             // swap goalkeepers
-            if (ball.owner.role == GOALKEEPER) {
-                if (ball.owner != keepers[ball.owner.team.index]) {
-                    Team team = ball.owner.team;
-                    Player newKeeper = ball.owner;
-                    Player oldKeeper = keepers[team.index];
+            if (ball.owner != keepers[ball.owner.team.index]) {
+                Team team = ball.owner.team;
+                Player newKeeper = ball.owner;
+                Player oldKeeper = keepers[team.index];
 
-                    newKeeper.setState(STATE_KEEPER_POSITIONING);
+                newKeeper.setState(STATE_KEEPER_POSITIONING);
 
-                    resetTargetPosition(oldKeeper);
-                    oldKeeper.setState(STATE_REACH_TARGET);
+                resetTargetPosition(oldKeeper);
+                oldKeeper.setState(STATE_REACH_TARGET);
 
-                    Collections.swap(team.lineup, oldKeeper.lineupIndex(), newKeeper.lineupIndex());
-                    keepers[team.index] = newKeeper;
+                Collections.swap(team.lineup, oldKeeper.lineupIndex(), newKeeper.lineupIndex());
+                keepers[team.index] = newKeeper;
 
-                    ball.a = newKeeper.angleToPoint(lastTrained.x, lastTrained.y);
-                    ball.v = 180;
-                }
-            }
-
-            // swap controls
-            else if ((ball.owner.inputDevice == ball.owner.ai)
-                && (lastTrained.inputDevice != lastTrained.ai)) {
-
-                ball.owner.setInputDevice(lastTrained.inputDevice);
-                ball.owner.setState(STATE_STAND_RUN);
-
-                lastTrained.setInputDevice(lastTrained.ai);
-                resetTargetPosition(lastTrained);
-                lastTrained.setState(STATE_REACH_TARGET);
+                ball.a = newKeeper.angleToPoint(lastTrained.x, lastTrained.y);
+                ball.v = 180;
             }
         }
 
@@ -146,6 +148,16 @@ class TrainingStateFree extends TrainingState {
             && ball.owner != keepers[AWAY]
             && ball.owner.inputDevice != ball.owner.ai) {
             lastTrained = ball.owner;
+        }
+
+        InputDevice humanInput = lastTrained.inputDevice;
+        List<Player> switchablePlayers = switchablePlayers();
+        if (humanInput.fire3Down()) {
+            Player selected = manualPlayerSwitcher.select(switchablePlayers, lastTrained, null);
+            if (selected != null) {
+                assignTrainingControl(selected, humanInput);
+                lastTrained = selected;
+            }
         }
 
         if (lastTrained.inputDevice.fire2Down()) {
@@ -173,6 +185,24 @@ class TrainingStateFree extends TrainingState {
         ball.setY(lastTrained.y + BALL_R * EMath.sin(lastTrained.a));
         ball.setZ(0);
         ball.vMax = 0;
+    }
+
+    private List<Player> switchablePlayers() {
+        List<Player> players = new ArrayList<>();
+        for (int t = HOME; t <= AWAY; t++) {
+            players.addAll(team[t].lineup);
+        }
+        return players;
+    }
+
+    /** Transfers the training controller without changing the independently simulated ball. */
+    private void assignTrainingControl(Player selected, InputDevice humanInput) {
+        for (int t = HOME; t <= AWAY; t++) {
+            for (Player player : team[t].lineup) {
+                player.inputDevice = player == selected ? humanInput : player.ai;
+            }
+        }
+        selected.setState(STATE_STAND_RUN);
     }
 
     private void setIntroPositions() {

@@ -189,13 +189,38 @@ public class Settings {
 
     private String defaultKeyboardConfigs() {
         ArrayList<KeyboardConfig> keyboardConfigs = new ArrayList<>();
-        keyboardConfigs.add(new KeyboardConfig(Input.Keys.LEFT, Input.Keys.RIGHT, Input.Keys.UP, Input.Keys.DOWN, Input.Keys.M, Input.Keys.N));
-        keyboardConfigs.add(new KeyboardConfig(Input.Keys.A, Input.Keys.D, Input.Keys.W, Input.Keys.S, Input.Keys.V, Input.Keys.B));
+        keyboardConfigs.add(new KeyboardConfig(Input.Keys.LEFT, Input.Keys.RIGHT, Input.Keys.UP,
+            Input.Keys.DOWN, Input.Keys.M, Input.Keys.N, Input.Keys.COMMA));
+        keyboardConfigs.add(new KeyboardConfig(Input.Keys.A, Input.Keys.D, Input.Keys.W,
+            Input.Keys.S, Input.Keys.V, Input.Keys.B, Input.Keys.C));
         return json.toJson(keyboardConfigs);
     }
 
     public ArrayList<KeyboardConfig> getKeyboardConfigs() {
-        return new ArrayList<>(Arrays.asList(json.fromJson(KeyboardConfig[].class, keyboardConfigs)));
+        ArrayList<KeyboardConfig> configs = new ArrayList<>(Arrays.asList(
+            json.fromJson(KeyboardConfig[].class, keyboardConfigs)
+        ));
+        int[] preferredSwitchKeys = {Input.Keys.COMMA, Input.Keys.C};
+        for (int port = 0; port < configs.size() && port < preferredSwitchKeys.length; port++) {
+            KeyboardConfig config = configs.get(port);
+            int preferredKey = preferredSwitchKeys[port];
+            if (config.button3 < 0 && !isAssigned(configs, preferredKey)) {
+                config.button3 = preferredKey;
+            }
+        }
+        return configs;
+    }
+
+    private boolean isAssigned(ArrayList<KeyboardConfig> configs, int keyCode) {
+        for (KeyboardConfig config : configs) {
+            if (config.keyLeft == keyCode || config.keyRight == keyCode
+                || config.keyUp == keyCode || config.keyDown == keyCode
+                || config.button1 == keyCode || config.button2 == keyCode
+                || config.button3 == keyCode) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void setKeyboardConfigs(ArrayList<KeyboardConfig> keyboardConfigs) {

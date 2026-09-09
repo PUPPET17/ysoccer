@@ -12,6 +12,7 @@ public class InputDeviceMapper {
         dto.y0 = device.y0;
         dto.fire10 = device.fire10;
         dto.fire20 = device.fire20;
+        dto.fire30 = device.fire30;
         return dto;
     }
 
@@ -20,5 +21,6 @@ public class InputDeviceMapper {
         device.y0 = dto.y0;
         device.fire10 = dto.fire10;
         device.fire20 = dto.fire20;
+        device.fire30 = dto.fire30;
     }
 }

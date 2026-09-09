@@ -21,5 +21,6 @@ class Joystick extends InputDevice {
         y0 = round(this.controller.getAxis(config.yAxis));
         fire10 = this.controller.getButton(config.button1);
         fire20 = this.controller.getButton(config.button2);
+        fire30 = config.button3 >= 0 && this.controller.getButton(config.button3);
     }
 }

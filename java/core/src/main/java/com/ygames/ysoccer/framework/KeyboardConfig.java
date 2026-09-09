@@ -9,12 +9,15 @@ public class KeyboardConfig extends InputDeviceConfig {
 
     public int button1;
     public int button2;
+    /** Dedicated player-switch key; -1 means an older configuration has not assigned it. */
+    public int button3 = -1;
 
     public KeyboardConfig() {
         super(InputDevice.Type.KEYBOARD);
     }
 
-    KeyboardConfig(int keyLeft, int keyRight, int keyUp, int keyDown, int button1, int button2) {
+    KeyboardConfig(int keyLeft, int keyRight, int keyUp, int keyDown,
+                   int button1, int button2, int button3) {
         super(InputDevice.Type.KEYBOARD);
         this.keyLeft = keyLeft;
         this.keyRight = keyRight;
@@ -22,5 +25,6 @@ public class KeyboardConfig extends InputDeviceConfig {
         this.keyDown = keyDown;
         this.button1 = button1;
         this.button2 = button2;
+        this.button3 = button3;
     }
 }

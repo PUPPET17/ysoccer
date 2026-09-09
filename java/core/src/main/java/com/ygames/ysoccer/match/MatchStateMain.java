@@ -66,6 +66,7 @@ class MatchStateMain extends MatchState {
         super.doActions(deltaTime);
 
         float timeLeft = deltaTime;
+        boolean processSwitchButton = true;
         while (timeLeft >= GLGame.SUBFRAME_DURATION) {
 
             if (scene.subframe % GLGame.SUBFRAMES == 0) {
@@ -256,9 +257,12 @@ class MatchStateMain extends MatchState {
 
             for (int t = HOME; t <= AWAY; t++) {
                 if (scene.team[t].usesAutomaticInputDevice()) {
+                    scene.team[t].updateManualPlayerSwitch(processSwitchButton);
                     scene.team[t].automaticInputDeviceSelection();
                 }
             }
+            // Input edges are sampled once per rendered frame, while this loop may run eight or more physics steps.
+            processSwitchButton = false;
 
             scene.updateBallZone();
             scene.updateTeamTactics();

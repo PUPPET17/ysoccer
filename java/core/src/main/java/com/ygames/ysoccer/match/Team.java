@@ -21,8 +21,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.ygames.ysoccer.framework.GLGame.LogType.PLAYER_SELECTION;
-import static com.ygames.ysoccer.match.Const.BALL_PREDICTION;
 import static com.ygames.ysoccer.match.Const.FREE_KICK_DISTANCE;
 import static com.ygames.ysoccer.match.Const.GOAL_LINE;
 import static com.ygames.ysoccer.match.Const.PLAYER_W;
@@ -36,7 +34,6 @@ import static com.ygames.ysoccer.match.Player.Role.LEFT_WINGER;
 import static com.ygames.ysoccer.match.Player.Role.MIDFIELDER;
 import static com.ygames.ysoccer.match.Player.Role.RIGHT_BACK;
 import static com.ygames.ysoccer.match.Player.Role.RIGHT_WINGER;
-import static com.ygames.ysoccer.match.PlayerFsm.Id.STATE_STAND_RUN;
 
 public class Team implements Json.Serializable {
 
@@ -94,6 +91,7 @@ public class Team implements Json.Serializable {
 
     Player near1; // nearest to the ball
     Player bestDefender;
+    private final ManualPlayerSwitcher manualPlayerSwitcher;
 
     public TextureRegion image;
     public boolean imageIsDefaultLogo;
@@ -102,6 +100,7 @@ public class Team implements Json.Serializable {
         controlMode = ControlMode.UNDEFINED;
         kits = new ArrayList<>();
         players = new ArrayList<>();
+        manualPlayerSwitcher = new ManualPlayerSwitcher();
     }
 
     @Override
@@ -502,6 +501,7 @@ public class Team implements Json.Serializable {
     }
 
     void assignAutomaticInputDevices(Player receiver) {
+        manualPlayerSwitcher.reset();
         if (usesAutomaticInputDevice()) {
             for (int i = 0; i < TEAM_SIZE; i++) {
                 Player player = lineup.get(i);
@@ -517,127 +517,78 @@ public class Team implements Json.Serializable {
     void automaticInputDeviceSelection() {
         Ball ball = match.ball;
 
-        // search controlled player
-        Player controlled = null;
-        int len = lineup.size();
-        for (int i = 0; i < len; i++) {
-            Player player = lineup.get(i);
+        Player controlled = controlledPlayer();
+        if (ball.owner != null && ball.owner.team == this) {
+            // Possession is the only automatic override: action input must follow the player carrying the ball.
+            if (ball.owner != controlled) {
+                assignControlTo(ball.owner);
+            }
+        } else if (controlled == null) {
+            // Establish control only when entering open play without any selected player.
+            Player initialPlayer = initialControllablePlayer();
+            if (initialPlayer != null) {
+                assignControlTo(initialPlayer);
+            }
+        }
+    }
+
+    /**
+     * Processes the dedicated switch button without allowing ordinary automatic selection.
+     * The match state allows only one physics subframe to consume each rendered input frame.
+     *
+     * @param processButton whether this subframe may consume a new switch-button press
+     */
+    void updateManualPlayerSwitch(boolean processButton) {
+        manualPlayerSwitcher.update();
+
+        Ball ball = match.ball;
+        if (ball.owner != null && ball.owner.team == this) {
+            manualPlayerSwitcher.reset();
+            return;
+        }
+
+        Player controlled = controlledPlayer();
+        Player preferred = ball.ownerLast != null && ball.ownerLast.team != this
+            ? bestDefender : null;
+
+        if (processButton && inputDevice.fire3Down()) {
+            Player selected = manualPlayerSwitcher.select(lineup, controlled, preferred);
+            if (selected != null) {
+                assignControlTo(selected);
+            }
+        }
+    }
+
+    /** Clears the button-cycle state when the match leaves normal open play. */
+    void resetManualPlayerSwitch() {
+        manualPlayerSwitcher.reset();
+    }
+
+    private Player controlledPlayer() {
+        for (Player player : lineup) {
             if (player.inputDevice != player.ai) {
-                controlled = player;
+                return player;
             }
         }
+        return null;
+    }
 
-        if (ball.owner != null) {
-
-            // ball owned: attacking
-            if (ball.owner.team.index == index) {
-                if (ball.owner != controlled) {
-                    GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), (controlled != null ? controlled.numberName() : "") + " > " + ball.owner.numberName() + " because is ball owner (attacking)");
-                    if (controlled != null) {
-                        controlled.inputDevice = controlled.ai;
-                    } else {
-                        controlled = ball.owner;
-                    }
-                    ball.owner.inputDevice = inputDevice;
-                }
-            }
-
-            // ball owned by opponent: pressing
-            else {
-                if (bestDefenderBetterThan(controlled)) {
-                    GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), (controlled != null ? controlled.numberName() : "") + " > " + bestDefender.numberName() + " because is best defender (pressing)");
-                    if (controlled != null) {
-                        controlled.inputDevice = controlled.ai;
-                    } else {
-                        controlled = bestDefender;
-                    }
-                    bestDefender.inputDevice = inputDevice;
-                } else if (controlled == null) {
-                    GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), " > " + near1.numberName() + " because of no best defender and no controlled (pressing)");
-                    controlled = near1;
-                    near1.inputDevice = inputDevice;
-                }
-            }
-
-        } else {
-
-            // owned last ball: attacking
-            if (match.ball.ownerLast != null && match.ball.ownerLast.team.index == index) {
-                if (near1betterThan(controlled)) {
-                    GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), (controlled != null ? controlled.numberName() : "") + " > " + near1.numberName() + " because is nearest (attacking)");
-                    if (controlled != null) {
-                        controlled.inputDevice = controlled.ai;
-                    } else {
-                        controlled = near1;
-                    }
-                    near1.inputDevice = inputDevice;
-                }
-            }
-
-            // opponent owned last ball
-            else {
-                // intercepting in own side
-                if (ball.ySide == side) {
-                    if (bestDefenderBetterThan(controlled)) {
-                        GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), (controlled != null ? controlled.numberName() : "") + " > " + bestDefender.numberName() + " because is best defender (intercepting ball in own side)");
-                        if (controlled != null) {
-                            controlled.inputDevice = controlled.ai;
-                        } else {
-                            controlled = bestDefender;
-                        }
-                        bestDefender.inputDevice = inputDevice;
-                    } else if (controlled == null) {
-                        GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), " > " + near1.numberName() + " because of no best defender and no controlled (intercepting ball in own side)");
-                        controlled = near1;
-                        near1.inputDevice = inputDevice;
-                    }
-                }
-
-                // intercepting in opponent side
-                else if (near1betterThan(controlled)) {
-                    GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), (controlled != null ? controlled.numberName() : "") + " > " + near1.numberName() + " because is nearest (intercepting ball in opponent side)");
-                    if (controlled != null) {
-                        controlled.inputDevice = controlled.ai;
-                    } else {
-                        controlled = near1;
-                    }
-                    near1.inputDevice = inputDevice;
-                }
-            }
-        }
-
-        if (controlled == null) {
-            GLGame.debug(PLAYER_SELECTION, this.getClass().getSimpleName(), " > " + near1.numberName() + " because of last option");
-
-            if (near1.getState().checkId(STATE_STAND_RUN)) {
-                near1.inputDevice = inputDevice;
-            }
+    private void assignControlTo(Player selected) {
+        for (Player player : lineup) {
+            player.inputDevice = player == selected ? inputDevice : player.ai;
         }
     }
 
-    private boolean near1betterThan(Player controlled) {
-        if (near1 == controlled || near1.lineupIndex() == 0) return false;
-
-        if (controlled == null) return true;
-
-        // avoid stealing controls while still kicking
-        if (!controlled.checkState(STATE_STAND_RUN)) return false;
-
-        // passing mate, let him get the ball
-        if (near1 == controlled.passingMate) {
-            return false;
-        } else {
-            return near1.frameDistance < 0.5 * controlled.frameDistance;
+    private Player initialControllablePlayer() {
+        if (near1 != null && near1.isActive && near1.role != GOALKEEPER) {
+            return near1;
         }
-    }
-
-    private boolean bestDefenderBetterThan(Player controlled) {
-        if (bestDefender == null) return false;
-
-        if (controlled == null) return true;
-
-        return bestDefender != controlled
-            && bestDefender.frameDistance < BALL_PREDICTION;
+        for (Player player : lineup) {
+            if (player.isActive && player.role != GOALKEEPER) {
+                return player;
+            }
+        }
+        return null;
     }
 
     InputDevice fire1Down() {

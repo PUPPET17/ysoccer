@@ -748,6 +748,11 @@ public class Match extends Scene<MatchFsm, MatchState> implements Json.Serializa
 
     @Override
     public void clearDisplayFlags() {
+        for (Team value : team) {
+            if (value != null) {
+                value.resetManualPlayerSwitch();
+            }
+        }
         displayControlledPlayer = false;
         displayFoulMaker = false;
         displayBallOwner = false;

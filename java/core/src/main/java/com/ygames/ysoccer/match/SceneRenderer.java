@@ -387,6 +387,38 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
         }
     }
 
+    /** Draws a high-contrast arrow and ground ring around the player receiving human input. */
+    void drawControlledPlayerMarker(Player player) {
+        if (player == null || !player.currentData.isVisible) {
+            return;
+        }
+
+        FrameData d = player.currentData;
+        float markerY = d.y - 54 - d.z;
+
+        batch.end();
+        shapeRenderer.setProjectionMatrix(camera.combined);
+
+        // A dark border keeps the marker readable over snow, grass, crowd, and bright kits.
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(0.08f, 0.08f, 0.08f, 1f);
+        shapeRenderer.triangle(d.x - 9, markerY - 12, d.x + 9, markerY - 12, d.x, markerY + 2);
+        shapeRenderer.setColor(1f, 0.9f, 0f, 1f);
+        shapeRenderer.triangle(d.x - 6, markerY - 9, d.x + 6, markerY - 9, d.x, markerY);
+        shapeRenderer.end();
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(0.08f, 0.08f, 0.08f, 1f);
+        shapeRenderer.circle(d.x, d.y + 3, 12, 24);
+        shapeRenderer.setColor(1f, 0.9f, 0f, 1f);
+        shapeRenderer.circle(d.x, d.y + 3, 10, 24);
+        shapeRenderer.circle(d.x, d.y + 3, 11, 24);
+        shapeRenderer.end();
+
+        batch.begin();
+        batch.setColor(0xFFFFFF, 1f);
+    }
+
     void drawPlayerNumberAndName(Player player) {
         Assets.font10.draw(batch, player.number + " " + player.shirtName, 10, 2, Font.Align.LEFT);
     }

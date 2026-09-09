@@ -340,6 +340,7 @@ public class MatchRenderer extends SceneRenderer<Match> {
                     FrameData d = player.currentData;
                     if (d.isVisible) {
                         if (d.isHumanControlled) {
+                            drawControlledPlayerMarker(player);
                             drawPlayerNumber(player);
                         } else if (Settings.showDevelopmentInfo && Settings.showPlayerNumber) {
                             Assets.font6.draw(batch, player.number, d.x, d.y - 40 - d.z, CENTER);

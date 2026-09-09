@@ -18,7 +18,7 @@ public class Const {
     static float SHOOTING_ANGLE_TOLERANCE = 22.5f;
 
     /** Global multiplier applied to every player's running speed. */
-    static final float PLAYER_MOVEMENT_SPEED_FACTOR = 0.8f;
+    static final float PLAYER_MOVEMENT_SPEED_FACTOR = 0.85f;
 
     /** Original game's maximum close-control distance, in pitch pixels. */
     static final float ORIGINAL_DRIBBLE_CONTROL_DISTANCE = 9f;

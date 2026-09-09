@@ -7,6 +7,8 @@ public class JoystickConfig extends InputDeviceConfig {
     public int yAxis = -1;
     public int button1 = -1;
     public int button2 = -1;
+    /** Optional player-switch button; old saved controller configurations leave it unset. */
+    public int button3 = -1;
 
     public JoystickConfig() {
         super(InputDevice.Type.JOYSTICK);
@@ -26,5 +28,6 @@ public class JoystickConfig extends InputDeviceConfig {
         yAxis = -1;
         button1 = -1;
         button2 = -1;
+        button3 = -1;
     }
 }

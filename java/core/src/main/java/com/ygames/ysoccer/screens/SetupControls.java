@@ -27,9 +27,11 @@ import static com.ygames.ysoccer.framework.Font.Align.CENTER;
 
 class SetupControls extends GLScreen {
 
-    private enum ConfigParam {KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, BUTTON_1, BUTTON_2}
+    private enum ConfigParam {KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, BUTTON_1, BUTTON_2, BUTTON_3}
 
-    private final ConfigParam[] buttonParams = {ConfigParam.BUTTON_1, ConfigParam.BUTTON_2};
+    private final ConfigParam[] buttonParams = {
+        ConfigParam.BUTTON_1, ConfigParam.BUTTON_2, ConfigParam.BUTTON_3
+    };
     private final ConfigParam[] axisParams = {ConfigParam.KEY_LEFT, ConfigParam.KEY_RIGHT, ConfigParam.KEY_UP, ConfigParam.KEY_DOWN};
 
     private InputDeviceButton selectedInputDeviceButton;
@@ -125,6 +127,12 @@ class SetupControls extends GLScreen {
         widgets.add(w);
 
         w = new FireButton(2);
+        widgets.add(w);
+
+        w = new FireLabel(3);
+        widgets.add(w);
+
+        w = new FireButton(3);
         widgets.add(w);
 
         w = new ExitButton();
@@ -274,6 +282,13 @@ class SetupControls extends GLScreen {
                         }
                         keyboardConfig.button2 = keyCode;
                         break;
+
+                    case BUTTON_3:
+                        if (isKeyCodeAssigned(keyCode, configParam, selectedInputDeviceButton.port)) {
+                            return;
+                        }
+                        keyboardConfig.button3 = keyCode;
+                        break;
                 }
             }
             setKeyboardConfigs();
@@ -299,14 +314,20 @@ class SetupControls extends GLScreen {
 
                 case BUTTON_1:
                     if (buttonIndex == -1) return;
-                    if (buttonIndex == joystickConfig.button2) return;
+                    if (buttonIndex == joystickConfig.button2 || buttonIndex == joystickConfig.button3) return;
                     joystickConfig.button1 = buttonIndex;
                     break;
 
                 case BUTTON_2:
                     if (buttonIndex == -1) return;
-                    if (buttonIndex == joystickConfig.button1) return;
+                    if (buttonIndex == joystickConfig.button1 || buttonIndex == joystickConfig.button3) return;
                     joystickConfig.button2 = buttonIndex;
+                    break;
+
+                case BUTTON_3:
+                    if (buttonIndex == -1) return;
+                    if (buttonIndex == joystickConfig.button1 || buttonIndex == joystickConfig.button2) return;
+                    joystickConfig.button3 = buttonIndex;
                     break;
             }
             if (joystickConfig.isConfigured()) {
@@ -364,6 +385,8 @@ class SetupControls extends GLScreen {
                 return true;
             if (config.button2 == keyCode && (configParam != ConfigParam.BUTTON_2 || port != i))
                 return true;
+            if (config.button3 == keyCode && (configParam != ConfigParam.BUTTON_3 || port != i))
+                return true;
         }
         return false;
     }
@@ -371,7 +394,7 @@ class SetupControls extends GLScreen {
 
     private boolean isKeyCodeReserved(int keyCode) {
         Integer[] reservedKeyCodes = {
-                Input.Keys.SPACE, Input.Keys.R, Input.Keys.P, Input.Keys.H,
+                Input.Keys.SPACE, Input.Keys.R, Input.Keys.P, Input.Keys.H, Input.Keys.APOSTROPHE,
                 Input.Keys.F1, Input.Keys.F2, Input.Keys.F3, Input.Keys.F4,
                 Input.Keys.F5, Input.Keys.F6, Input.Keys.F7, Input.Keys.F8,
                 Input.Keys.F9, Input.Keys.F10, Input.Keys.F11, Input.Keys.F12
@@ -582,8 +605,12 @@ class SetupControls extends GLScreen {
     private class FireLabel extends Button {
 
         FireLabel(int buttonNumber) {
-            setGeometry((game.gui.WIDTH - 200) / 2 + 420, 240 + (210 * (buttonNumber - 1)), 200, 40);
-            setText(gettext("CONTROLS.BUTTON") + " " + ((buttonNumber == 1) ? "A" : "B"), CENTER, font14);
+            setGeometry((game.gui.WIDTH - 200) / 2 + 420, 205 + (135 * (buttonNumber - 1)), 200, 40);
+            if (buttonNumber == 3) {
+                setText(gettext("CONTROLS.SWITCH PLAYER"), CENTER, font14);
+            } else {
+                setText(gettext("CONTROLS.BUTTON") + " " + ((buttonNumber == 1) ? "A" : "B"), CENTER, font14);
+            }
             setColor(0x404040);
             setActive(false);
         }
@@ -595,8 +622,9 @@ class SetupControls extends GLScreen {
 
         FireButton(int buttonNumber) {
             this.buttonNumber = buttonNumber;
-            configParam = (buttonNumber == 1) ? ConfigParam.BUTTON_1 : ConfigParam.BUTTON_2;
-            setGeometry((game.gui.WIDTH - 200) / 2 + 420, 280 + (210 * (buttonNumber - 1)), 200, 46);
+            configParam = buttonNumber == 1 ? ConfigParam.BUTTON_1
+                : buttonNumber == 2 ? ConfigParam.BUTTON_2 : ConfigParam.BUTTON_3;
+            setGeometry((game.gui.WIDTH - 200) / 2 + 420, 245 + (135 * (buttonNumber - 1)), 200, 46);
             setText("", CENTER, font14);
         }
 
@@ -605,10 +633,14 @@ class SetupControls extends GLScreen {
             switch (selectedInputDeviceButton.config.type) {
                 case KEYBOARD:
                     KeyboardConfig keyboardConfig = (KeyboardConfig) selectedInputDeviceButton.config;
-                    int value = (buttonNumber == 1) ? keyboardConfig.button1 : keyboardConfig.button2;
+                    int value = buttonNumber == 1 ? keyboardConfig.button1
+                        : buttonNumber == 2 ? keyboardConfig.button2 : keyboardConfig.button3;
                     if (entryMode) {
                         setText("?");
                         setColor(0xEB9532);
+                    } else if (value == -1) {
+                        setText(gettext(buttonNumber == 3 ? "CONTROLS.NOT SET" : "CONTROLS.UNKNOWN"));
+                        setColor(0xB40000);
                     } else {
                         setText(Input.Keys.toString(value).toUpperCase());
                         setColor(0x548854);
@@ -617,12 +649,13 @@ class SetupControls extends GLScreen {
 
                 case JOYSTICK:
                     JoystickConfig joystickConfig = (JoystickConfig) selectedInputDeviceButton.config;
-                    int index = (buttonNumber == 1) ? joystickConfig.button1 : joystickConfig.button2;
+                    int index = buttonNumber == 1 ? joystickConfig.button1
+                        : buttonNumber == 2 ? joystickConfig.button2 : joystickConfig.button3;
                     if (entryMode) {
                         setText("?");
                         setColor(0xEB9532);
                     } else if (index == -1) {
-                        setText(gettext("CONTROLS.UNKNOWN"));
+                        setText(gettext(buttonNumber == 3 ? "CONTROLS.NOT SET" : "CONTROLS.UNKNOWN"));
                         setColor(0xB40000);
                     } else {
                         setText(index);
@@ -690,4 +723,3 @@ class SetupControls extends GLScreen {
         }
     }
 }
-

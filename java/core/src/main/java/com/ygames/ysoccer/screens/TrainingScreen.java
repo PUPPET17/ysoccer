@@ -45,7 +45,7 @@ class TrainingScreen extends GLScreen {
         };
 
         console = new GUIConsole();
-        console.setDisplayKeyID(Input.Keys.F5);
+        console.setDisplayKeyID(Input.Keys.APOSTROPHE);
         console.setSizePercent(25, 100);
         console.setPositionPercent(0, 0);
         console.setHoverAlpha(0.9f);

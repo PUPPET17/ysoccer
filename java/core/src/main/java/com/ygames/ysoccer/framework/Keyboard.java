@@ -17,5 +17,6 @@ class Keyboard extends InputDevice {
         y0 = (Gdx.input.isKeyPressed(config.keyUp) ? -1 : 0) + (Gdx.input.isKeyPressed(config.keyDown) ? 1 : 0);
         fire10 = Gdx.input.isKeyPressed(config.button1);
         fire20 = Gdx.input.isKeyPressed(config.button2);
+        fire30 = config.button3 >= 0 && Gdx.input.isKeyPressed(config.button3);
     }
 }
