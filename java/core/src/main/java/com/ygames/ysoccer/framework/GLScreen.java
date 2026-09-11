@@ -98,7 +98,7 @@ public abstract class GLScreen implements Screen {
             inputDevice.update();
         }
 
-        game.menuInput.read(this);
+        game.menuInput.read(this, delta);
 
         int len = widgets.size();
         for (int i = 0; i < len; i++) {

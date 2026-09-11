@@ -35,6 +35,8 @@ public class GLGame extends Game {
     public TextureAtlas guiAtlas;
     private float deltaTime;
     public InputDeviceList inputDevices;
+    /** Temporarily stops hardware discovery while a control-binding dialog captures raw events. */
+    public boolean capturingControls;
     Mouse mouse;
     MenuInput menuInput;
 
@@ -144,6 +146,7 @@ public class GLGame extends Game {
     @Override
     public void render() {
         try {
+            if (!capturingControls) syncControllers();
             deltaTime += Gdx.graphics.getDeltaTime();
 
             int subFrames = (int) (deltaTime / SUBFRAME_DURATION);
@@ -245,6 +248,7 @@ public class GLGame extends Game {
         this.competition = null;
     }
 
+    /** Rebuilds local devices after editing bindings; call only outside an active match. */
     public void reloadInputDevices() {
         inputDevices.clear();
 
@@ -253,14 +257,16 @@ public class GLGame extends Game {
         inputDevices.add(new Keyboard(0, keyboardConfigs.get(0)));
         inputDevices.add(new Keyboard(1, keyboardConfigs.get(1)));
 
-        // joysticks
-        int port = 0;
+        syncControllers();
+    }
+
+    /** Discovers hot-plugged devices without invalidating any existing team/player assignment. */
+    private void syncControllers() {
         for (Controller controller : Controllers.getControllers()) {
+            if (!controller.isConnected() || inputDevices.hasController(controller)) continue;
             JoystickConfig joystickConfig = settings.getJoystickConfigByName(controller.getName());
-            if (joystickConfig != null) {
-                inputDevices.add(new Joystick(controller, joystickConfig, port));
-                port++;
-            }
+            if (joystickConfig == null) joystickConfig = JoystickConfig.forController(controller);
+            inputDevices.connectController(controller, joystickConfig);
         }
     }
 

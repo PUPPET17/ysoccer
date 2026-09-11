@@ -9,6 +9,7 @@ import static com.ygames.ysoccer.gui.Widget.Event.FIRE2_DOWN;
 import static com.ygames.ysoccer.gui.Widget.Event.FIRE2_HOLD;
 import static com.ygames.ysoccer.gui.Widget.Event.FIRE2_UP;
 
+/** Combines local input for menu focus and actions with frame-rate-independent key repeat. */
 class MenuInput {
 
     // values
@@ -21,10 +22,10 @@ class MenuInput {
     private boolean fire2Old;
 
     // timers
-    private int xTimer;
-    private int yTimer;
-    private int fire1Timer;
-    private int fire2Timer;
+    private float xTimer;
+    private float yTimer;
+    private float fire1Timer;
+    private float fire2Timer;
 
     private final GLGame game;
 
@@ -32,14 +33,16 @@ class MenuInput {
         this.game = game;
     }
 
-    void read(GLScreen screen) {
+    void read(GLScreen screen, float delta) {
+        // A stalled frame must not produce a burst of menu actions.
+        delta = Math.max(0, Math.min(0.1f, delta));
 
         // fire 1 delay
         if (fire1) {
             if (!fire1Old) {
-                fire1Timer = 20;
+                fire1Timer = 0.3125f;
             } else if (fire1Timer == 0) {
-                fire1Timer = 6;
+                fire1Timer = 0.09375f;
             }
         } else {
             if (!fire1Old) {
@@ -48,15 +51,15 @@ class MenuInput {
         }
 
         if (fire1Timer > 0) {
-            fire1Timer -= 1;
+            fire1Timer = Math.max(0, fire1Timer - delta);
         }
 
         // fire 2 delay
         if (fire2) {
             if (!fire2Old) {
-                fire2Timer = 20;
+                fire2Timer = 0.3125f;
             } else if (fire2Timer == 0) {
-                fire2Timer = 6;
+                fire2Timer = 0.09375f;
             }
         } else {
             if (!fire2Old) {
@@ -65,7 +68,7 @@ class MenuInput {
         }
 
         if (fire2Timer > 0) {
-            fire2Timer -= 1;
+            fire2Timer = Math.max(0, fire2Timer - delta);
         }
 
         // old values
@@ -127,6 +130,17 @@ class MenuInput {
             }
         }
 
+        // Reversing direction responds immediately, even during the initial hold delay.
+        xTimer = x != xOld ? 0 : Math.max(0, xTimer - delta);
+        yTimer = y != yOld ? 0 : Math.max(0, yTimer - delta);
+        if ((selectedWidget == null || !selectedWidget.visible || !selectedWidget.active)
+            && (x != 0 || y != 0 || fire1 || fire2)) {
+            for (Widget widget : screen.widgets) {
+                if (screen.setSelectedWidget(widget)) break;
+            }
+            selectedWidget = screen.getSelectedWidget();
+        }
+
         // up / down
         int bias = 1;
         if (selectedWidget != null) {
@@ -185,30 +199,24 @@ class MenuInput {
 
         // x-y delays
         if (x != 0) {
-            if (xOld == 0) {
-                xTimer = 12;
+            if (xOld != x) {
+                xTimer = 0.3f;
             } else if (xTimer == 0) {
-                xTimer = 4;
+                xTimer = 0.09f;
             }
         } else {
             xTimer = 0;
         }
         if (y != 0) {
-            if (yOld == 0) {
-                yTimer = 12;
+            if (yOld != y) {
+                yTimer = 0.3f;
             } else if (yTimer == 0) {
-                yTimer = 4;
+                yTimer = 0.09f;
             }
         } else {
             yTimer = 0;
         }
 
-        if (xTimer > 0) {
-            xTimer -= 1;
-        }
-        if (yTimer > 0) {
-            yTimer -= 1;
-        }
     }
 
     Widget.Event getWidgetEvent() {

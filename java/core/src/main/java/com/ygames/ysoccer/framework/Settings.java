@@ -240,7 +240,13 @@ public class Settings {
         return null;
     }
 
+    /** Saves edited models while retaining bindings for controllers that are currently unplugged. */
     public void setJoystickConfigs(ArrayList<JoystickConfig> joystickConfigs) {
-        this.joystickConfigs = json.toJson(joystickConfigs);
+        ArrayList<JoystickConfig> saved = getJoystickConfigs();
+        for (JoystickConfig edited : joystickConfigs) {
+            saved.removeIf(config -> edited.name.equals(config.name));
+            saved.add(edited);
+        }
+        this.joystickConfigs = json.toJson(saved);
     }
 }

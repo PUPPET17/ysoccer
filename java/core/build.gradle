@@ -18,3 +18,19 @@ dependencies {
   implementation group: 'ar.com.hjg', name: 'pngj', version: '2.1.0'
   implementation "com.strongjoshua:libgdx-inGameConsole:1.0.0"
 }
+
+// Input lifecycle regressions run without a physical gamepad or graphics context.
+tasks.register('controllerRegressionTest', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.framework.ControllerRegressionTest'
+}
+check.dependsOn controllerRegressionTest
+
+tasks.register('warningRegressionTest', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.screens.CompetitionWarningRegressionTest'
+  args rootProject.file('assets/i18n').absolutePath
+}
+check.dependsOn warningRegressionTest

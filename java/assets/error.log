@@ -1,0 +1,15 @@
+Exception in thread "main" java.lang.StringIndexOutOfBoundsException: begin 0, end -1, length 11
+	at java.base/java.lang.String.checkBoundsBeginEnd(String.java:4606)
+	at java.base/java.lang.String.substring(String.java:2709)
+	at com.ygames.ysoccer.screens.CreateCompetitionWarning.<init>(CreateCompetitionWarning.java:51)
+	at com.ygames.ysoccer.screens.Main$DiyCompetitionButton.onFire1Down(Main.java:218)
+	at com.ygames.ysoccer.gui.Widget.fireEvent(Widget.java:146)
+	at com.ygames.ysoccer.framework.GLScreen.render(GLScreen.java:115)
+	at com.ygames.ysoccer.framework.GLGame.render(GLGame.java:155)
+	at com.badlogic.gdx.backends.lwjgl3.Lwjgl3Window.update(Lwjgl3Window.java:435)
+	at com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application.loop(Lwjgl3Application.java:181)
+	at com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application.<init>(Lwjgl3Application.java:153)
+	at com.ygames.ysoccer.lwjgl3.Lwjgl3Launcher.createApplication(Lwjgl3Launcher.java:15)
+	at com.ygames.ysoccer.lwjgl3.Lwjgl3Launcher.main(Lwjgl3Launcher.java:11)
+
+

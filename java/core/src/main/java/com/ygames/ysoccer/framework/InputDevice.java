@@ -29,6 +29,16 @@ public abstract class InputDevice {
         this.available = available;
     }
 
+    /** Whether this slot has usable hardware; virtual and keyboard devices always do. */
+    public boolean isConnected() {
+        return true;
+    }
+
+    /** A newly pressed controller pause action, independent of the three gameplay actions. */
+    public boolean pauseDown() {
+        return false;
+    }
+
     public void update() {
 
         // update input buffer

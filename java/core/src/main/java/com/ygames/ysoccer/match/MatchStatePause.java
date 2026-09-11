@@ -56,7 +56,7 @@ class MatchStatePause extends MatchState {
     @Override
     SceneFsm.Action[] checkConditions() {
 
-        if (resume) {
+        if (resume || fsm.inputDevices.pauseDown()) {
             return newAction(RESTORE_FOREGROUND);
         }
 

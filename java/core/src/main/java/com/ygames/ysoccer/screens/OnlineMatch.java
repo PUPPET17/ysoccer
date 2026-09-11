@@ -37,7 +37,15 @@ public class OnlineMatch extends GLScreen {
         game.soundManager.subscribeEvents();
 
         game.inputDevices.setAvailability(true);
-        inputDevice = game.inputDevices.get(2);
+        // Prefer a connected gamepad; retained unplugged slots must not capture the online player.
+        for (InputDevice device : game.inputDevices) {
+            if (device.type == InputDevice.Type.JOYSTICK && device.isConnected()) {
+                inputDevice = device;
+                inputDevice.setAvailable(false);
+                break;
+            }
+        }
+        if (inputDevice == null) inputDevice = game.inputDevices.assignFirstAvailable();
     }
 
     public void setup(MatchSetupDto matchSetupDto) {

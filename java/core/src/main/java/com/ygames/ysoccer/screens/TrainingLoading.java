@@ -6,6 +6,7 @@ import com.ygames.ysoccer.framework.Assets;
 import com.ygames.ysoccer.framework.EventManager;
 import com.ygames.ysoccer.framework.GLGame;
 import com.ygames.ysoccer.framework.GLScreen;
+import com.ygames.ysoccer.framework.InputDevice;
 import com.ygames.ysoccer.match.Kit;
 import com.ygames.ysoccer.match.Player;
 import com.ygames.ysoccer.match.SceneSettings;
@@ -70,21 +71,16 @@ class TrainingLoading extends GLScreen {
         game.setScreen(new TrainingScreen(game, training));
     }
 
+    /** Assigns connected devices to outfield trainees; disconnected retained slots cannot join a new session. */
     private void assignInputDevices() {
-        int assigned_devices = 0;
+        game.inputDevices.setAvailability(true);
         int[] i = {training.team[HOME].lineup.size() - 1, training.team[AWAY].lineup.size() - 1};
         int t = HOME;
         while (i[HOME] >= 0 || i[AWAY] >= 0) {
             if (i[t] >= 0) {
                 Player ply = training.team[t].lineup.get(i[t]);
-                if (assigned_devices < game.inputDevices.size()) {
-                    if (ply.role != GOALKEEPER) {
-                        ply.setInputDevice(game.inputDevices.get(assigned_devices));
-                        assigned_devices = assigned_devices + 1;
-                    }
-                } else {
-                    ply.setInputDevice(ply.ai);
-                }
+                InputDevice device = ply.role == GOALKEEPER ? null : game.inputDevices.assignFirstAvailable();
+                ply.setInputDevice(device == null ? ply.ai : device);
                 i[t]--;
             }
             t = 1 - t;

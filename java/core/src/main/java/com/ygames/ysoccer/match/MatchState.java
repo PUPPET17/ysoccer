@@ -43,7 +43,7 @@ abstract class MatchState extends SceneState<MatchFsm, Match> {
             return newFadedAction(HOLD_FOREGROUND, REPLAY);
         }
 
-        if (checkPauseKey && Gdx.input.isKeyPressed(P)) {
+        if (checkPauseKey && (Gdx.input.isKeyPressed(P) || fsm.inputDevices.pauseDown())) {
             return newAction(HOLD_FOREGROUND, PAUSE);
         }
 
