@@ -12,6 +12,7 @@ import com.ygames.ysoccer.framework.InputDeviceList;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static com.ygames.ysoccer.framework.EMath.rotate;
 import static com.ygames.ysoccer.match.Const.BALL_PREDICTION;
@@ -39,6 +40,10 @@ import static com.ygames.ysoccer.match.PlayerFsm.Id.STATE_SENT_OFF;
 import static com.ygames.ysoccer.match.PlayerFsm.Id.STATE_STAND_RUN;
 import static com.ygames.ysoccer.match.PlayerFsm.Id.STATE_SUBSTITUTED;
 
+/**
+ * 保存对阵、各阶段比分和实时比赛场景状态，并为赛事提供无需运行场景的自动比分生成入口。
+ * 自动生成单队进球数不更新比赛记录；赛事调用方负责组合双方比分并保存对应阶段的结果。
+ */
 public class Match extends Scene<MatchFsm, MatchState> implements Json.Serializable {
 
     public enum ResultType {AFTER_90_MINUTES, AFTER_EXTRA_TIME, AFTER_PENALTIES}
@@ -295,36 +300,61 @@ public class Match extends Scene<MatchFsm, MatchState> implements Json.Serializa
         return getResult() != null;
     }
 
+    /**
+     * 根据双方首发球员的攻防评分，抽取自动比赛中本队在指定时段的进球数。
+     *
+     * @param teamFor 本次生成进球数的球队，必须具有可供评分的完整首发名单
+     * @param teamAgainst 提供防守评分的对手，必须具有可供评分的完整首发名单
+     * @param extraTimeResult 为 true 时只生成 30 分钟加时赛新增进球，不包含常规时间比分
+     * @return 0～6 个进球；不修改球队或比赛记录，但会消耗共享随机源的状态
+     */
     public static int generateGoals(Team teamFor, Team teamAgainst, boolean extraTimeResult) {
+        double factor = (teamFor.offenseRating() - (double) teamAgainst.defenseRating() + 300) / 60.0;
+        return generateGoals(factor, extraTimeResult, Assets.random);
+    }
 
-        double factor = (teamFor.offenseRating() - teamAgainst.defenseRating() + 300) / 60.0;
-
-        int a, b;
-        int[] goalsProbability = new int[7];
-        for (int goals = 0; goals < 7; goals++) {
-            a = Const.goalsProbability[(int) Math.floor(factor)][goals];
-            b = Const.goalsProbability[(int) Math.ceil(factor)][goals];
-            goalsProbability[goals] = (int) Math.round(a + (b - a) * (factor - Math.floor(factor)));
+    /**
+     * 按攻防优势抽样，允许测试使用固定种子或指定随机序列复现比分边界。
+     *
+     * @param factor 由球队攻防评分换算的有限档位值，超界时使用概率表的最近端点
+     * @param extraTimeResult 是否将整场分布折算为 30 分钟加时赛新增进球
+     * @param random 非空随机源，本方法会推进其状态
+     * @return 指定时段的单队进球数，不更新任何比赛记录
+     */
+    static int generateGoals(double factor, boolean extraTimeResult, Random random) {
+        int[][] weights = Const.GOALS_WEIGHTS_BY_ATTACK_ADVANTAGE;
+        factor = Math.max(0, Math.min(weights.length - 1, factor));
+        int lower = (int) Math.floor(factor);
+        int upper = (int) Math.ceil(factor);
+        double fraction = factor - lower;
+        double draw = random.nextDouble() * 1000;
+        int lowerSum = 0;
+        int upperSum = 0;
+        int goals = weights[lower].length - 1;
+        for (int candidate = 0; candidate < weights[lower].length; candidate++) {
+            lowerSum += weights[lower][candidate];
+            upperSum += weights[upper][candidate];
+            // 插值累计权重与逐列插值等价，且末端严格为 1000，不把舍入误差转移给 6 球。
+            double cumulative = lowerSum + (upperSum - lowerSum) * fraction;
+            if (draw < cumulative) {
+                goals = candidate;
+                break;
+            }
         }
 
-        goalsProbability[6] = 1000;
-        for (int goals = 0; goals <= 5; goals++) {
-            goalsProbability[6] = goalsProbability[6] - goalsProbability[goals];
-        }
-
-        int r = (int) Math.ceil(1000 * Math.random());
-        int sum = 0;
-        int goals = -1;
-        while (sum < r) {
-            goals += 1;
-            sum += goalsProbability[goals];
-        }
-
-        if (extraTimeResult) {
-            return (int) Math.floor(goals / 3f);
-        } else {
+        if (!extraTimeResult) {
             return goals;
         }
+
+        // 假设进球速率不变，每球独立以 30/90 概率保留，使加时赛期望为整场的三分之一。
+        // 不能对抽出的进球数直接除以 3 取整，否则整场抽到 1、2 球时都会被抹去。
+        int extraTimeGoals = 0;
+        for (int goal = 0; goal < goals; goal++) {
+            if (random.nextDouble() < 1.0 / 3.0) {
+                extraTimeGoals++;
+            }
+        }
+        return extraTimeGoals;
     }
 
     void updateAi() {

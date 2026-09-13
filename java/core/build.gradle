@@ -34,3 +34,11 @@ tasks.register('warningRegressionTest', JavaExec) {
   args rootProject.file('assets/i18n').absolutePath
 }
 check.dependsOn warningRegressionTest
+
+// Automatic score generation can be checked without running the match scene.
+tasks.register('goalsRegressionTest', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.match.GoalsRegressionTest'
+}
+check.dependsOn goalsRegressionTest
