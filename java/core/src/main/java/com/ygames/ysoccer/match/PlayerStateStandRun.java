@@ -130,12 +130,8 @@ class PlayerStateStandRun extends PlayerState {
                         && player.ballDistance > 12) {
                     return fsm.stateTackle;
                 }
-            } else {
-                // release input device
-                if (player.team.usesAutomaticInputDevice()) {
-                    player.inputDevice = player.ai;
-                }
             }
+            // A missed tackle request keeps control here; player hand-off belongs exclusively to fire3.
         }
         return null;
     }
