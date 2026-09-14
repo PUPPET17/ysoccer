@@ -59,15 +59,22 @@ class PlayerStateKick extends PlayerState {
                     } else {
                         mode = Mode.PASSING;
                         ball.v = 240f;
+                        Player receiver = null;
 
                         // automatic angle correction
                         if (angle_diff == 0) {
-                            player.searchPassingMate();
+                            // AI already chose and faced a tactical receiver in AiStatePassing.
+                            if (!player.isAiControlled() || player.passingMate == null) {
+                                player.searchPassingMate();
+                            }
                             if (player.passingMate != null) {
+                                receiver = player.passingMate;
                                 ball.a += player.passingMateAngleCorrection;
                                 ball.v += PASSING_SPEED_FACTOR * player.passingMate.distanceFrom(player);
                             }
                         }
+
+                        player.team.recordTacticalPass(player, receiver, ball.a);
 
                         EventManager.publish(new BallKickEvent(0.6f));
                     }

@@ -27,6 +27,30 @@ tasks.register('controllerRegressionTest', JavaExec) {
 }
 check.dependsOn controllerRegressionTest
 
+// Player actions and the dedicated switch action must never share a control hand-off path.
+tasks.register('playerControlRegressionTest', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.match.PlayerControlRegressionTest'
+}
+check.dependsOn playerControlRegressionTest
+
+// Coach intents are verified against the production positioning and decision policies.
+tasks.register('tacticalStateRegressionTest', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.match.TacticalStateRegressionTest'
+}
+check.dependsOn tacticalStateRegressionTest
+
+// Ownership-frame phase transitions and phase-aware tactical trends are deterministic headlessly.
+tasks.register('teamPhaseRegressionTest', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.match.TeamPhaseRegressionTest'
+}
+check.dependsOn teamPhaseRegressionTest
+
 // Match-view projection tests require neither a graphics context nor physical input hardware.
 tasks.register('matchViewRegressionTest', JavaExec) {
   dependsOn testClasses

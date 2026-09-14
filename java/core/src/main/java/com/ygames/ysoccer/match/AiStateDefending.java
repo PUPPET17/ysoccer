@@ -8,8 +8,8 @@ import static com.ygames.ysoccer.match.PlayerFsm.Id.STATE_STAND_RUN;
 
 class AiStateDefending extends AiState {
 
-    private static int MIN_UPDATE_INTERVAL = 15;
-    private static int MAX_UPDATE_INTERVAL = 30;
+    private static final int MIN_UPDATE_INTERVAL = 15;
+    private static final int MAX_UPDATE_INTERVAL = 30;
 
     private int nextUpdate;
 
@@ -21,7 +21,7 @@ class AiStateDefending extends AiState {
     void entryActions() {
         super.entryActions();
 
-        nextUpdate = EMath.rand(MIN_UPDATE_INTERVAL, MAX_UPDATE_INTERVAL);
+        nextUpdate = tacticalUpdateInterval();
     }
 
     @Override
@@ -37,7 +37,7 @@ class AiStateDefending extends AiState {
                 ai.y0 = Math.round(EMath.sin(a));
             }
 
-            nextUpdate += EMath.rand(MIN_UPDATE_INTERVAL, MAX_UPDATE_INTERVAL);
+            nextUpdate += tacticalUpdateInterval();
         }
     }
 
@@ -68,5 +68,13 @@ class AiStateDefending extends AiState {
         }
 
         return null;
+    }
+
+    /** Returns the normal reaction interval biased by this player's defensive-work instruction. */
+    private int tacticalUpdateInterval() {
+        int baseInterval = EMath.rand(MIN_UPDATE_INTERVAL, MAX_UPDATE_INTERVAL);
+        PlayerTacticalInstruction instruction = player.team.getTacticalState().getInstruction(player);
+        return TacticalDecisionPolicy.defendingUpdateInterval(
+            baseInterval, instruction, player.team.getTeamPhase());
     }
 }

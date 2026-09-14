@@ -336,6 +336,21 @@ public class Match extends Scene<MatchFsm, MatchState> implements Json.Serializa
         }
     }
 
+    /**
+     * Returns the team targeted by local tactical debug commands. A player- or coach-controlled
+     * side takes priority; computer-versus-computer development matches fall back to the home side.
+     */
+    Team tacticalDebugTeam() {
+        for (Team candidate : team) {
+            if (candidate != null
+                && (candidate.controlMode == Team.ControlMode.PLAYER
+                    || candidate.controlMode == Team.ControlMode.COACH)) {
+                return candidate;
+            }
+        }
+        return team[HOME] != null ? team[HOME] : team[AWAY];
+    }
+
     void updateBall() {
         ball.update();
         updateBallOwner();

@@ -10,6 +10,8 @@ import com.ygames.ysoccer.framework.GLGame;
 import com.ygames.ysoccer.framework.GLGraphics;
 import com.ygames.ysoccer.framework.Settings;
 
+import java.util.Locale;
+
 import static com.badlogic.gdx.Gdx.gl;
 import static com.ygames.ysoccer.framework.Assets.gettext;
 import static com.ygames.ysoccer.framework.Font.Align.CENTER;
@@ -183,7 +185,8 @@ public class MatchRenderer extends SceneRenderer<Match> {
                     ", " + scene.camera.limitedToString() +
                     ", " + scene.camera.targetToString() +
                     ", " + scene.camera.offsetToString()
-                , guiWidth / 5, 42, Font.Align.LEFT);
+                    , guiWidth / 5, 42, Font.Align.LEFT);
+            drawTacticalStateDebug();
         }
 
         // clock
@@ -267,6 +270,90 @@ public class MatchRenderer extends SceneRenderer<Match> {
         }
 
         batch.end();
+    }
+
+    /** Draws the current team and individual coach biases used by the real match AI. */
+    private void drawTacticalStateDebug() {
+        Team team = scene.tacticalDebugTeam();
+        if (team == null || team.lineup == null) return;
+
+        TacticalState state = team.getTacticalState();
+        TacticalDebugMetrics metrics = team.getTacticalDebugMetrics();
+        TeamPhase phase = team.getTeamPhase();
+        String side = team.index == HOME ? "HOME" : "AWAY";
+        Assets.font10.draw(batch, String.format(Locale.ROOT,
+            "TacticalState [%s] | phase %s %.1fs",
+            side, phase, team.getTeamPhaseFrames() / (float) GLGame.VIRTUAL_REFRESH_RATE),
+            5, 62, Font.Align.LEFT);
+        Assets.font10.draw(batch, String.format(Locale.ROOT,
+            "width %.2f -> %.2f | compactness %.2f -> %.2f",
+            state.getWidth(), state.getTargetWidth(),
+            state.getCompactness(), state.getTargetCompactness()),
+            5, 82, Font.Align.LEFT);
+        Assets.font10.draw(batch, String.format(Locale.ROOT,
+            "tempo %.2f | passingRisk %.2f | forwardRun %.2f | retention %.2f | backPass %.2f",
+            state.getTempo(), state.getPassingRisk(), state.getForwardRunRate(),
+            state.getBallRetention(), state.getBackPassPreference()),
+            5, 102, Font.Align.LEFT);
+
+        if (metrics.hasPreviousWindow()) {
+            Assets.font10.draw(batch, String.format(Locale.ROOT,
+                "actualSpread %.1f -> %.1f | lineGap %.1f -> %.1f | forwardRun %.0f%% -> %.0f%%",
+                metrics.getPreviousHorizontalSpread(), metrics.getAverageHorizontalSpread(),
+                metrics.getPreviousLineGap(), metrics.getAverageLineGap(),
+                100 * metrics.getPreviousForwardRunRatio(), 100 * metrics.getForwardRunRatio()),
+                5, 122, Font.Align.LEFT);
+        } else {
+            Assets.font10.draw(batch, String.format(Locale.ROOT,
+                "observed %.1fs | actualSpread %.1f | lineGap %.1f | forwardRun %.0f%%",
+                metrics.getObservationSeconds(), metrics.getAverageHorizontalSpread(),
+                metrics.getAverageLineGap(), 100 * metrics.getForwardRunRatio()),
+                5, 122, Font.Align.LEFT);
+        }
+
+        float transitionSeconds = metrics.getPhaseSeconds(TeamPhase.ATTACKING_TRANSITION)
+            + metrics.getPhaseSeconds(TeamPhase.DEFENDING_TRANSITION);
+        Assets.font10.draw(batch, String.format(Locale.ROOT,
+            "phase seconds O/T/D/U %.1f/%.1f/%.1f/%.1f | switches/short %d/%d",
+            metrics.getPhaseSeconds(TeamPhase.ORGANIZED_POSSESSION), transitionSeconds,
+            metrics.getPhaseSeconds(TeamPhase.STABLE_DEFENSE),
+            metrics.getPhaseSeconds(TeamPhase.DISPUTED), metrics.getPhaseSwitches(),
+            metrics.getAbnormallyShortPhases()),
+            5, 142, Font.Align.LEFT);
+
+        float previousForward = metrics.getPreviousPhasePassRatio(
+            phase, TacticalDecisionPolicy.PassDirection.FORWARD);
+        float previousSide = metrics.getPreviousPhasePassRatio(
+            phase, TacticalDecisionPolicy.PassDirection.SIDEWAYS);
+        float previousBack = metrics.getPreviousPhasePassRatio(
+            phase, TacticalDecisionPolicy.PassDirection.BACKWARD);
+        Assets.font10.draw(batch, String.format(Locale.ROOT,
+            "phase pass%% F/S/B %.0f/%.0f/%.0f -> %.0f/%.0f/%.0f",
+            100 * previousForward, 100 * previousSide, 100 * previousBack,
+            100 * metrics.getPhasePassRatio(phase, TacticalDecisionPolicy.PassDirection.FORWARD),
+            100 * metrics.getPhasePassRatio(phase, TacticalDecisionPolicy.PassDirection.SIDEWAYS),
+            100 * metrics.getPhasePassRatio(phase, TacticalDecisionPolicy.PassDirection.BACKWARD)),
+            5, 162, Font.Align.LEFT);
+
+        Player forward = team.findPrimaryAttacker();
+        if (forward != null) {
+            PlayerTacticalInstruction instruction = state.getInstruction(forward);
+            Assets.font10.draw(batch, String.format(Locale.ROOT,
+                "Player #%d holdUp %.2f | comeShort %.2f | runBehind %.2f | layoff %.2f",
+                forward.number, instruction.getHoldUpPlay(), instruction.getComeShort(),
+                instruction.getRunBehind(), instruction.getLayoffPreference()),
+                5, 182, Font.Align.LEFT);
+        }
+
+        Player playerSeven = team.findPlayerByNumber(7);
+        if (playerSeven != null) {
+            PlayerTacticalInstruction instruction = state.getInstruction(playerSeven);
+            Assets.font10.draw(batch, String.format(Locale.ROOT,
+                "Player #7 defensiveWork %.2f | tracking %.2f | depth %.2f | pressSupport %.2f",
+                instruction.getDefensiveWorkRate(), instruction.getTrackingBack(),
+                instruction.getDefensiveDepth(), instruction.getPressSupport()),
+                5, 202, Font.Align.LEFT);
+        }
     }
 
     private void renderBackground() {

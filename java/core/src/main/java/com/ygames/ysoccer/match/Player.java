@@ -1180,6 +1180,96 @@ public class Player implements Json.Serializable {
         return passingMate;
     }
 
+    /**
+     * Selects an AI passing option using directional tactical preferences when a coach instruction
+     * requires them, otherwise delegates to the original narrow-cone receiver search unchanged.
+     *
+     * <p>The tactical search still filters out receivers that cannot accept the ball. It expands
+     * the search around the player because sideways and backward circulation cannot be expressed
+     * by the legacy 27.5-degree cone, then lets {@link AiStatePassing} turn through normal player
+     * controls before releasing the pass.</p>
+     */
+    Player searchTacticalPassingMate() {
+        TacticalState tacticalState = team.getTacticalState();
+        PlayerTacticalInstruction instruction = tacticalState.getInstruction(this);
+        TeamPhase phase = team.getTeamPhase();
+        if (!TacticalDecisionPolicy.usesTacticalPassing(tacticalState, instruction, phase)) {
+            return searchPassingMate();
+        }
+
+        passingMate = null;
+        passingMateAngleCorrection = 0;
+        float bestScore = -Float.MAX_VALUE;
+        int count = Math.min(TEAM_SIZE, team.lineup.size());
+        for (int i = 0; i < count; i++) {
+            Player candidate = team.lineup.get(i);
+            if (candidate == this
+                || !candidate.checkStates(STATE_STAND_RUN, STATE_REACH_TARGET, STATE_IDLE)) {
+                continue;
+            }
+
+            float distance = candidate.distanceFrom(this);
+            if (distance < 20 || distance > 450) continue;
+
+            float targetPointX = candidate.x + 5 * EMath.cos(candidate.a);
+            float targetPointY = candidate.y + 5 * EMath.sin(candidate.a);
+            float targetAngle = EMath.aTan2(targetPointY - ball.y, targetPointX - ball.x);
+            float angleDifference = EMath.signedAngleDiff(targetAngle, a);
+            float attackingProgress = -team.side * (candidate.y - y);
+            float laneSafety = passingLaneSafety(candidate);
+            float score = TacticalDecisionPolicy.passOptionScore(
+                attackingProgress, distance, angleDifference, laneSafety,
+                tacticalState, instruction, phase);
+            if (score > bestScore) {
+                bestScore = score;
+                passingMate = candidate;
+                passingMateAngleCorrection = angleDifference;
+            }
+        }
+
+        GLGame.debug(PASSING, numberName(), passingMate == null
+            ? "has not found a tactical passing mate"
+            : "has selected tactical mate " + passingMate.numberName()
+                + " with score " + bestScore
+                + " and angle correction " + passingMateAngleCorrection);
+        return passingMate;
+    }
+
+    /**
+     * Estimates how clear the ground-pass corridor is, normalized to 0..1. The estimate is used
+     * only to rank already legal teammate options; collision and ball physics remain authoritative.
+     */
+    float passingLaneSafety(Player candidate) {
+        if (candidate == null) return Float.NaN;
+        if (team.match == null) return 1;
+        Team opponent = team.match.team[1 - team.index];
+        if (opponent == null || opponent.lineup == null) return 1;
+
+        float nearestOpponent = 80;
+        int count = Math.min(TEAM_SIZE, opponent.lineup.size());
+        for (int i = 0; i < count; i++) {
+            Player defender = opponent.lineup.get(i);
+            nearestOpponent = Math.min(nearestOpponent,
+                distanceToSegment(defender.x, defender.y, x, y, candidate.x, candidate.y));
+        }
+        return Math.max(0, Math.min(1, (nearestOpponent - 10) / 70));
+    }
+
+    private static float distanceToSegment(float pointX, float pointY,
+                                           float startX, float startY,
+                                           float endX, float endY) {
+        float segmentX = endX - startX;
+        float segmentY = endY - startY;
+        float lengthSquared = segmentX * segmentX + segmentY * segmentY;
+        if (lengthSquared == 0) return EMath.dist(pointX, pointY, startX, startY);
+
+        float projection = ((pointX - startX) * segmentX + (pointY - startY) * segmentY)
+            / lengthSquared;
+        projection = Math.max(0, Math.min(1, projection));
+        return EMath.dist(pointX, pointY,
+            startX + projection * segmentX, startY + projection * segmentY);
+    }
+
     String numberName() {
         return number + "_" + shirtName + " (" + fsm.getState().getClass().getSimpleName() + ", " + (inputDevice == ai ? ai.fsm.state.getClass().getSimpleName() : "Controlled") + ")";
     }

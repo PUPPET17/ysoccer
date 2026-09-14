@@ -71,7 +71,7 @@ class AiStateAttacking extends AiState {
         }
 
         if (isMateSearchingTime()) {
-            player.searchPassingMate();
+            player.searchTacticalPassingMate();
             GLGame.debug(AI_ATTACKING, player.numberName(), "Mate searching, passingMate: " + (player.passingMate == null ? "null" : player.passingMate.numberName()) + " with passingMateAngleCorrection: " + player.passingMateAngleCorrection + ", updating targetAngle: " + targetAngle + ", timer: " + timer);
         }
 
@@ -110,7 +110,12 @@ class AiStateAttacking extends AiState {
 
         // passing
         if (isMateSearchingTime()) {
-            if (player.passingMate != null && Assets.random.nextFloat() < Parameters.PASSING_PROBABILITY) {
+            TacticalState tacticalState = player.team.getTacticalState();
+            PlayerTacticalInstruction instruction = tacticalState.getInstruction(player);
+            float passingProbability = TacticalDecisionPolicy.passingProbability(
+                Parameters.PASSING_PROBABILITY, tacticalState, instruction,
+                player.team.getTeamPhase());
+            if (player.passingMate != null && Assets.random.nextFloat() < passingProbability) {
                 return fsm.statePassing;
             }
         }
@@ -127,12 +132,18 @@ class AiStateAttacking extends AiState {
             float distance = EMath.dist(player.x, player.y, POST_X * EMath.sgn(player.x), GOAL_LINE * EMath.sgn(player.y));
             float probabilityByDistance = probabilityByDistance(distance, 0.1f, DIRECT_SHOT_DISTANCE);
 
-            float probability = (probabilityByVisualWidth + probabilityByDistance * probabilityByDistance) / 2;
+            float baseProbability = (probabilityByVisualWidth
+                + probabilityByDistance * probabilityByDistance) / 2;
+            TacticalState tacticalState = player.team.getTacticalState();
+            float probability = TacticalDecisionPolicy.shootingProbability(
+                baseProbability, tacticalState, tacticalState.getInstruction(player),
+                player.team.getTeamPhase());
             GLGame.debug(AI_ATTACKING, player.numberName(), "Inside direct shot area, visualWidth: " + visualWidth
                     + ", probabilityByVisualWidth: " + probabilityByVisualWidth
                     + ", distance: " + distance
                     + ", probabilityByDistance: " + probabilityByDistance
-                    + ", probability: " + probability);
+                    + ", baseProbability: " + baseProbability
+                    + ", tacticalProbability: " + probability);
             if (Assets.random.nextFloat() < probability) {
                 return fsm.stateKicking;
             }
@@ -211,7 +222,12 @@ class AiStateAttacking extends AiState {
         // 1. minimize mates frame distance
         Vector3 mateWeights = getMateWeights();
         GLGame.debug(AI_ATTACKING, player.numberName(), "Mates weights: " + mateWeights);
-        totalWeights.add(mateWeights.scl(Parameters.MATE_FACTOR));
+        TacticalState tacticalState = player.team.getTacticalState();
+        PlayerTacticalInstruction instruction = tacticalState.getInstruction(player);
+        float mateFactor = Parameters.MATE_FACTOR
+            * TacticalDecisionPolicy.mateInfluence(
+                tacticalState, instruction, player.team.getTeamPhase());
+        totalWeights.add(mateWeights.scl(mateFactor));
 
         // 2. maximize opponent frame distance
         Vector3 opponentWeights = getOpponentWeights();
@@ -232,7 +248,10 @@ class AiStateAttacking extends AiState {
                 GOAL_FACTOR = Parameters.GOAL_FACTOR;
             }
         }
-        totalWeights.add(goalWeights.scl(GOAL_FACTOR));
+        float tacticalGoalFactor = GOAL_FACTOR
+            * TacticalDecisionPolicy.goalInfluence(
+                tacticalState, instruction, player.team.getTeamPhase());
+        totalWeights.add(goalWeights.scl(tacticalGoalFactor));
         GLGame.debug(AI_ATTACKING, player.numberName(), "Goal weights: " + goalWeights);
 
         GLGame.debug(AI_ATTACKING, player.numberName(), "TotalWeights: " + totalWeights);

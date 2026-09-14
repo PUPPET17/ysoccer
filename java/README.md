@@ -70,6 +70,11 @@ documents the current finite-state AI, formation target tables, positioning and 
 passing and shooting selection, defending behavior, and the gaps that must be closed
 before natural-language touchline instructions can reliably affect a live match.
 
+The follow-up [minimum tactical-control demo](docs/tactical-control-demo.md) documents
+the match-local `TacticalState`, deterministic ownership phases, six development hotkeys,
+HUD observability, behavioral regressions, and the remaining limits before text or voice
+command parsing is introduced.
+
 ## Gradle
 
 This project uses [Gradle](https://gradle.org/) to manage dependencies.

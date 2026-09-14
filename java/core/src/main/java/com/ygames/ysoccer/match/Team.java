@@ -12,6 +12,7 @@ import com.ygames.ysoccer.framework.EMath;
 import com.ygames.ysoccer.framework.GLGame;
 import com.ygames.ysoccer.framework.InputDevice;
 import com.ygames.ysoccer.framework.RgbPair;
+import com.ygames.ysoccer.framework.Settings;
 import com.ygames.ysoccer.framework.TeamList;
 import com.ygames.ysoccer.gui.Gui;
 
@@ -92,6 +93,9 @@ public class Team implements Json.Serializable {
     Player near1; // nearest to the ball
     Player bestDefender;
     private final ManualPlayerSwitcher manualPlayerSwitcher;
+    private final TacticalState tacticalState;
+    private final TacticalDebugMetrics tacticalDebugMetrics;
+    private final TeamPhaseTracker teamPhaseTracker;
 
     public TextureRegion image;
     public boolean imageIsDefaultLogo;
@@ -101,6 +105,9 @@ public class Team implements Json.Serializable {
         kits = new ArrayList<>();
         players = new ArrayList<>();
         manualPlayerSwitcher = new ManualPlayerSwitcher();
+        tacticalState = new TacticalState();
+        tacticalDebugMetrics = new TacticalDebugMetrics();
+        teamPhaseTracker = new TeamPhaseTracker();
     }
 
     @Override
@@ -193,6 +200,9 @@ public class Team implements Json.Serializable {
 
     void beforeMatch(Match match) {
         this.match = match;
+        tacticalState.resetImmediately();
+        tacticalDebugMetrics.reset();
+        teamPhaseTracker.reset();
         lineup = new ArrayList<>();
         int lineupSize = Math.min(players.size(), TEAM_SIZE + match.getSettings().benchSize);
         for (int i = 0; i < lineupSize; i++) {
@@ -206,6 +216,11 @@ public class Team implements Json.Serializable {
     }
 
     void beforeTraining(Training training) {
+        // Training has no coach-command lifecycle and must not inherit a previous match profile.
+        match = null;
+        tacticalState.resetImmediately();
+        tacticalDebugMetrics.reset();
+        teamPhaseTracker.reset();
         lineup = new ArrayList<>();
         int lineupSize = players.size();
         for (int i = 0; i < lineupSize; i++) {
@@ -267,7 +282,7 @@ public class Team implements Json.Serializable {
     private void findBestDefender() {
         Player newBestDefender = null;
 
-        float minBallDistance = 2 * Const.GOAL_LINE;
+        float minDefenderDistance = 2 * Const.GOAL_LINE;
         if ((match.ball.ownerLast != null) && (match.ball.ownerLast.team != this)) {
             float ballToGoalDistance = EMath.dist(match.ball.x, match.ball.y, 0, Const.GOAL_LINE * side);
 
@@ -275,39 +290,59 @@ public class Team implements Json.Serializable {
                 Player player = lineup.get(i);
 
                 float playerGoalDistance = EMath.dist(player.x, player.y, 0, Const.GOAL_LINE * side);
+                float effectiveDistance = TacticalDecisionPolicy.effectiveDefenderDistance(
+                    player.ballDistance, tacticalState.getInstruction(player), getTeamPhase());
                 if ((playerGoalDistance < 0.95f * ballToGoalDistance)
-                    && (player.ballDistance < minBallDistance)) {
+                    && (effectiveDistance < minDefenderDistance)) {
                     newBestDefender = player;
-                    minBallDistance = player.ballDistance;
+                    minDefenderDistance = effectiveDistance;
                 }
             }
         }
 
-        if (bestDefender == null || minBallDistance < 0.9f * bestDefender.ballDistance) {
+        float currentDefenderDistance = bestDefender == null
+            ? Float.MAX_VALUE
+            : TacticalDecisionPolicy.effectiveDefenderDistance(
+                bestDefender.ballDistance, tacticalState.getInstruction(bestDefender),
+                getTeamPhase());
+        if (bestDefender == null || minDefenderDistance < 0.9f * currentDefenderDistance) {
             bestDefender = newBestDefender;
         }
     }
 
     void updateTactics(boolean relativeToCenter) {
-
         int ball_zone = 17 - side * match.ball.zoneX - 5 * side * match.ball.zoneY;
-
         if (relativeToCenter) {
             ball_zone = 17;
         }
 
-        for (int i = 1; i < TEAM_SIZE; i++) {
+        int activePlayers = Math.min(TEAM_SIZE, lineup.size());
+        if (activePlayers <= 1) return;
 
+        float centreX = 0;
+        float centreY = 0;
+        for (int i = 1; i < activePlayers; i++) {
+            float baseX = -side * Assets.tactics[tactics].target[i][ball_zone][0];
+            float baseY = -side * (Assets.tactics[tactics].target[i][ball_zone][1] - 4);
+            centreX += baseX;
+            centreY += baseY;
+        }
+        centreX /= activePlayers - 1;
+        centreY /= activePlayers - 1;
+
+        TeamPhase phase = getTeamPhase();
+
+        for (int i = 1; i < activePlayers; i++) {
             Player player = lineup.get(i);
-
-            int tx = Assets.tactics[tactics].target[i][ball_zone][0];
-            int ty = Assets.tactics[tactics].target[i][ball_zone][1];
-
-            player.tx = (1 - Math.abs(match.ball.mx)) * tx + Math.abs(match.ball.mx) * tx;
-            player.ty = (1 - Math.abs(match.ball.my)) * ty + Math.abs(match.ball.my) * ty;
-
-            player.tx = -side * player.tx;
-            player.ty = -side * (player.ty - 4);
+            float baseX = -side * Assets.tactics[tactics].target[i][ball_zone][0];
+            float baseY = -side * (Assets.tactics[tactics].target[i][ball_zone][1] - 4);
+            PlayerTacticalInstruction instruction = tacticalState.getInstruction(player);
+            float targetX = TacticalPositioning.targetX(
+                baseX, centreX, match.ball.x, phase, tacticalState, instruction);
+            float targetY = TacticalPositioning.targetY(
+                baseX, baseY, centreY, side, match.ball.x, match.ball.y,
+                phase, tacticalState, instruction);
+            player.setTarget(targetX, targetY);
         }
     }
 
@@ -416,6 +451,10 @@ public class Team implements Json.Serializable {
     }
 
     void updateLineupAi() {
+        // Phase evidence and coach intent advance at the same 64 Hz cadence as AI decisions.
+        teamPhaseTracker.update(this, match == null ? null : match.ball);
+        tacticalState.update();
+        if (Settings.development) tacticalDebugMetrics.sample(this);
         int len = lineup.size();
         for (int i = 0; i < len; i++) {
             Player player = lineup.get(i);
@@ -423,6 +462,80 @@ public class Team implements Json.Serializable {
                 player.updateAi();
             }
         }
+    }
+
+    /**
+     * Returns this team's match-local coach intent. The state biases normal AI decisions and is
+     * reset before each match; it is deliberately excluded from team-data serialization.
+     */
+    public TacticalState getTacticalState() {
+        return tacticalState;
+    }
+
+    /**
+     * Returns the debounced match phase from this team's perspective. The value is derived solely
+     * from simulation-frame ownership evidence and is reset for each match or training session.
+     */
+    public TeamPhase getTeamPhase() {
+        return teamPhaseTracker.getPhase();
+    }
+
+    /** Returns the number of consecutive AI frames spent in the current phase. */
+    int getTeamPhaseFrames() {
+        return teamPhaseTracker.getPhaseFrames();
+    }
+
+    /** Exposes the deterministic tracker to package-level regression scenarios. */
+    TeamPhaseTracker getTeamPhaseTracker() {
+        return teamPhaseTracker;
+    }
+
+    /** Returns passive development observations for the current tactical comparison window. */
+    TacticalDebugMetrics getTacticalDebugMetrics() {
+        return tacticalDebugMetrics;
+    }
+
+    /** Archives the current debug observations and starts a fresh tactical comparison window. */
+    void startTacticalDebugComparisonWindow() {
+        tacticalDebugMetrics.startComparisonWindow();
+    }
+
+    /** Records an executed pass for development telemetry without affecting match statistics. */
+    void recordTacticalPass(Player passer, Player receiver, float ballAngle) {
+        if (Settings.development && match != null) {
+            tacticalDebugMetrics.recordPass(this, passer, receiver, ballAngle);
+        }
+    }
+
+    /** Returns the active player wearing {@code shirtNumber}, or {@code null} if not fielded. */
+    Player findPlayerByNumber(int shirtNumber) {
+        if (lineup == null) return null;
+        int activePlayers = Math.min(TEAM_SIZE, lineup.size());
+        for (int i = 0; i < activePlayers; i++) {
+            Player player = lineup.get(i);
+            if (player.isActive && player.number == shirtNumber) return player;
+        }
+        return null;
+    }
+
+    /**
+     * Returns the most central active attacker for the hold-up-play debug instruction.
+     * ySoccer has no striker subtype, so horizontal formation position is the narrowest reliable
+     * way to distinguish a centre-forward from wide attackers without changing squad data.
+     */
+    Player findPrimaryAttacker() {
+        if (lineup == null) return null;
+        Player primary = null;
+        float nearestCentre = Float.MAX_VALUE;
+        int activePlayers = Math.min(TEAM_SIZE, lineup.size());
+        for (int i = 1; i < activePlayers; i++) {
+            Player player = lineup.get(i);
+            if (player.isActive && player.role == ATTACKER && Math.abs(player.tx) < nearestCentre) {
+                primary = player;
+                nearestCentre = Math.abs(player.tx);
+            }
+        }
+        return primary;
     }
 
     public int nonAiInputDevicesCount() {
