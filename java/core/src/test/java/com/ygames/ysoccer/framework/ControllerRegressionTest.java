@@ -6,6 +6,8 @@ import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.controllers.Controller;
 import com.badlogic.gdx.controllers.ControllerMapping;
 import com.badlogic.gdx.utils.Json;
+import com.ygames.ysoccer.match.MatchViewMode;
+import com.ygames.ysoccer.match.MatchViewTransform;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -19,6 +21,7 @@ public final class ControllerRegressionTest {
     public static void main(String[] args) {
         defaultsAndLegacySettings();
         stickAndDpad();
+        horizontalMatchViewDirections();
         actionEdgesAndDisconnect();
         reconnectionAndAvailability();
         disconnectedSettingsSurvive();
@@ -110,6 +113,38 @@ public final class ControllerRegressionTest {
         pad.axes[1] = 0;
         joystick.update();
         check(joystick.yMoved() && joystick.y1 == 1, "bench release preserves navigation direction");
+    }
+
+    /** Verifies that both controller direction sources remain screen-relative in horizontal matches. */
+    private static void horizontalMatchViewDirections() {
+        Pad pad = new Pad("horizontal-view");
+        Joystick joystick = new Joystick(pad.controller, JoystickConfig.forController(pad.controller), 0);
+        MatchViewTransform transform = new MatchViewTransform(MatchViewMode.HORIZONTAL_2_5D);
+        joystick.update();
+
+        pad.axes[0] = 0.8f;
+        joystick.update();
+        joystick.update();
+        check(joystick.x1 == 1 && joystick.y1 == 0, "left stick reports screen right");
+        check(transform.worldInputX(joystick.x1, joystick.y1) == 0
+                && transform.worldInputY(joystick.x1, joystick.y1) == 1,
+            "left stick screen right maps to world positive y");
+        check(transform.worldInputAngle(joystick.x1, joystick.y1) == 90,
+            "left stick aiming follows horizontal projection");
+
+        pad.axes[0] = 0;
+        pad.buttons[pad.mapping.buttonDpadDown] = true;
+        joystick.update();
+        joystick.update();
+        check(joystick.x1 == 0 && joystick.y1 == 1, "D-pad reports screen down");
+        check(transform.worldInputX(joystick.x1, joystick.y1) == 1
+                && transform.worldInputY(joystick.x1, joystick.y1) == 0,
+            "D-pad screen down maps to world positive x");
+        check(transform.worldInputAngle(joystick.x1, joystick.y1) == 0,
+            "D-pad aiming follows horizontal projection");
+
+        // Replay and bench consumers read raw values, so their screen directions remain unchanged.
+        check(joystick.x1 == 0 && joystick.y1 == 1, "non-field controller navigation stays screen-relative");
     }
 
     private static void actionEdgesAndDisconnect() {

@@ -248,7 +248,7 @@ public class Player implements Json.Serializable {
      * Computer-controlled players already produce world directions and therefore bypass the local view transform.
      */
     int inputX() {
-        if (isAiControlled()) {
+        if (!usesScreenRelativeInput()) {
             return inputDevice.x1;
         }
         return scene.settings.getViewTransform().worldInputX(inputDevice.x1, inputDevice.y1);
@@ -256,7 +256,7 @@ public class Player implements Json.Serializable {
 
     /** Returns the field-relative vertical input used by player actions. */
     int inputY() {
-        if (isAiControlled()) {
+        if (!usesScreenRelativeInput()) {
             return inputDevice.y1;
         }
         return scene.settings.getViewTransform().worldInputY(inputDevice.x1, inputDevice.y1);
@@ -264,10 +264,19 @@ public class Player implements Json.Serializable {
 
     /** Returns the world-space movement or kick angle represented by the local player's screen input. */
     int inputAngle() {
-        if (isAiControlled()) {
+        if (!usesScreenRelativeInput()) {
             return inputDevice.angle;
         }
         return scene.settings.getViewTransform().worldInputAngle(inputDevice.x1, inputDevice.y1);
+    }
+
+    /**
+     * Screen-relative field control belongs only to local keyboards and physical controllers.
+     * AI and network devices already supply simulation-space directions; keeping them raw prevents
+     * presentation settings from leaking into deterministic or protocol-driven input.
+     */
+    private boolean usesScreenRelativeInput() {
+        return inputDevice.type == InputDevice.Type.KEYBOARD || inputDevice.type == InputDevice.Type.JOYSTICK;
     }
 
     void setAi(Ai ai) {
