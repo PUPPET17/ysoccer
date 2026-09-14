@@ -9,8 +9,9 @@ class CornerFlagSprite extends Sprite {
 
     private SceneSettings sceneSettings;
 
-    CornerFlagSprite(GLGraphics glGraphics, SceneSettings sceneSettings, int sideX, int sideY) {
-        super(glGraphics);
+    CornerFlagSprite(GLGraphics glGraphics, SceneSettings sceneSettings, int sideX, int sideY,
+                     MatchViewTransform viewTransform) {
+        super(glGraphics, viewTransform);
         this.sceneSettings = sceneSettings;
         x = sideX * Const.TOUCH_LINE;
         y = sideY * Const.GOAL_LINE;
@@ -25,7 +26,9 @@ class CornerFlagSprite extends Sprite {
             frameX += ((subframe / GLGame.SUBFRAMES) >> (4 - sceneSettings.wind.speed)) % 2;
             frameY = 1 + sceneSettings.wind.dirY;
         }
-        glGraphics.batch.draw(Assets.cornerFlags[frameX][frameY], x - 22, y - 35);
+        float viewX = viewTransform.projectX(x, y);
+        float viewY = viewTransform.projectY(x, y, 0);
+        glGraphics.batch.draw(Assets.cornerFlags[frameX][frameY], viewX - 22, viewY - 35);
     }
 
     void drawShadow(int subframe, SpriteBatch batch) {

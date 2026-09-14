@@ -23,7 +23,11 @@ public class SceneSettings {
 
     boolean fullScreen;
     public int zoom;
+    /** Presentation snapshot for this scene; it is not part of match rules or network state. */
+    public MatchViewMode viewMode = MatchViewMode.VERTICAL;
     public float shadowAlpha;
+
+    private transient MatchViewTransform viewTransform;
 
     public SceneSettings() {
     }
@@ -31,6 +35,7 @@ public class SceneSettings {
     public SceneSettings(Settings gameSettings) {
         this.zoom = gameSettings.zoom;
         this.fullScreen = gameSettings.fullScreen;
+        this.viewMode = gameSettings.matchViewMode;
 
         this.time = randomTime();
         this.pitchType = Pitch.random();
@@ -230,5 +235,17 @@ public class SceneSettings {
 
     public int getZoom() {
         return zoom;
+    }
+
+    /**
+     * Returns the reusable projection associated with the scene's immutable presentation snapshot.
+     * Laziness also supplies a safe vertical projection for settings received from legacy sources.
+     */
+    MatchViewTransform getViewTransform() {
+        MatchViewMode effectiveMode = viewMode == null ? MatchViewMode.VERTICAL : viewMode;
+        if (viewTransform == null || viewTransform.getMode() != effectiveMode) {
+            viewTransform = new MatchViewTransform(effectiveMode);
+        }
+        return viewTransform;
     }
 }

@@ -243,6 +243,33 @@ public class Player implements Json.Serializable {
         return inputDevice == ai;
     }
 
+    /**
+     * Returns the field-relative horizontal input used by player actions.
+     * Computer-controlled players already produce world directions and therefore bypass the local view transform.
+     */
+    int inputX() {
+        if (isAiControlled()) {
+            return inputDevice.x1;
+        }
+        return scene.settings.getViewTransform().worldInputX(inputDevice.x1, inputDevice.y1);
+    }
+
+    /** Returns the field-relative vertical input used by player actions. */
+    int inputY() {
+        if (isAiControlled()) {
+            return inputDevice.y1;
+        }
+        return scene.settings.getViewTransform().worldInputY(inputDevice.x1, inputDevice.y1);
+    }
+
+    /** Returns the world-space movement or kick angle represented by the local player's screen input. */
+    int inputAngle() {
+        if (isAiControlled()) {
+            return inputDevice.angle;
+        }
+        return scene.settings.getViewTransform().worldInputAngle(inputDevice.x1, inputDevice.y1);
+    }
+
     void setAi(Ai ai) {
         this.ai = ai;
     }

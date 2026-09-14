@@ -38,7 +38,7 @@ class PlayerStatePenaltyKickSpeed extends PlayerState {
 
             float factor = 0.8f; // medium shots
             if (player.inputDevice.value) {
-                float angleDiff = ((player.inputDevice.angle - kickAngle + 540) % 360) - 180;
+                float angleDiff = ((player.inputAngle() - kickAngle + 540) % 360) - 180;
                 // low shots
                 if (Math.abs(angleDiff) < 67.5f) {
                     factor = 0.35f;

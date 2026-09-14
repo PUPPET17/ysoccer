@@ -22,8 +22,8 @@ class PlayerStateCornerKickAngle extends PlayerState {
     void doActions() {
         super.doActions();
 
-        int x = player.inputDevice.x1;
-        int y = player.inputDevice.y1;
+        int x = player.inputX();
+        int y = player.inputY();
 
         // prevent kicking out
         if ((x != ball.xSide) && (y != ball.ySide)) {

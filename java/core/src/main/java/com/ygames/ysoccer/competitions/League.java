@@ -5,6 +5,7 @@ import com.badlogic.gdx.utils.JsonValue;
 import com.ygames.ysoccer.framework.Assets;
 import com.ygames.ysoccer.framework.Month;
 import com.ygames.ysoccer.match.Match;
+import com.ygames.ysoccer.match.MatchScoreSimulator;
 import com.ygames.ysoccer.match.Team;
 
 import java.util.ArrayList;
@@ -186,8 +187,9 @@ public class League extends Competition implements Json.Serializable {
         Team homeTeam = getTeam(HOME);
         Team awayTeam = getTeam(AWAY);
 
-        int homeGoals = Match.generateGoals(homeTeam, awayTeam, false);
-        int awayGoals = Match.generateGoals(awayTeam, homeTeam, false);
+        // 联赛赛历明确轮换主客场；杯赛等缺少场地定义的调用继续使用中立场兼容入口。
+        int homeGoals = Match.generateGoals(homeTeam, awayTeam, false, MatchScoreSimulator.Venue.HOME);
+        int awayGoals = Match.generateGoals(awayTeam, homeTeam, false, MatchScoreSimulator.Venue.AWAY);
 
         match.setResult(homeGoals, awayGoals, Match.ResultType.AFTER_90_MINUTES);
 

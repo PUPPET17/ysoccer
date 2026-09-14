@@ -27,39 +27,43 @@ public class TrainingRenderer extends SceneRenderer<Training> {
 
         resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
-        scene.camera.x = 0.5f * (Const.PITCH_W - screenWidth / (zoom / 100.0f));
-        scene.camera.y = 0.5f * (Const.PITCH_H - screenHeight / (zoom / 100.0f));
+        scene.camera.x = 0.5f * (Const.PITCH_W - scene.camera.getWorldViewportWidth());
+        scene.camera.y = 0.5f * (Const.PITCH_H - scene.camera.getWorldViewportHeight());
         for (int i = 0; i < Const.REPLAY_SUBFRAMES; i++) {
             scene.vCameraX[i] = Math.round(scene.camera.x);
             scene.vCameraY[i] = Math.round(scene.camera.y);
         }
 
-        ballSprite = new BallSprite(glGraphics, training.ball);
+        ballSprite = new BallSprite(glGraphics, training.ball, viewTransform);
         allSprites.add(ballSprite);
-        CoachSprite coachSprite = new CoachSprite(glGraphics, training.team[HOME].coach);
+        CoachSprite coachSprite = new CoachSprite(glGraphics, training.team[HOME].coach, viewTransform);
         allSprites.add(coachSprite);
 
         for (int t = HOME; t <= AWAY; t++) {
             int len = training.team[t].lineup.size();
             for (int i = 0; i < len; i++) {
-                PlayerSprite playerSprite = new PlayerSprite(glGraphics, training.team[t].lineup.get(i));
+                PlayerSprite playerSprite = new PlayerSprite(glGraphics, training.team[t].lineup.get(i), viewTransform);
                 allSprites.add(playerSprite);
             }
         }
 
         for (int xSide = -1; xSide <= 1; xSide += 2) {
             for (int ySide = -1; ySide <= 1; ySide += 2) {
-                allSprites.add(new JumperSprite(glGraphics, xSide, ySide));
+                allSprites.add(new JumperSprite(glGraphics, xSide, ySide, viewTransform));
             }
         }
 
         cornerFlagSprites = new CornerFlagSprite[4];
         for (int i = 0; i < 4; i++) {
-            cornerFlagSprites[i] = new CornerFlagSprite(glGraphics, scene.settings, i / 2 * 2 - 1, i % 2 * 2 - 1);
+            cornerFlagSprites[i] = new CornerFlagSprite(
+                glGraphics, scene.settings, i / 2 * 2 - 1, i % 2 * 2 - 1, viewTransform
+            );
             allSprites.add(cornerFlagSprites[i]);
         }
-        allSprites.add(new GoalTopA(glGraphics));
-        allSprites.add(new GoalTopB(glGraphics));
+        if (!viewTransform.isHorizontal()) {
+            allSprites.add(new GoalTopA(glGraphics, viewTransform));
+            allSprites.add(new GoalTopB(glGraphics, viewTransform));
+        }
     }
 
     public void render() {
@@ -69,28 +73,37 @@ public class TrainingRenderer extends SceneRenderer<Training> {
 
         gl.glEnable(GL20.GL_BLEND);
         gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        camera.setToOrtho(true, Gdx.graphics.getWidth() * 100f / zoom, Gdx.graphics.getHeight() * 100f / zoom);
-        camera.translate(-Const.CENTER_X + scene.cameraX, -Const.CENTER_Y + scene.cameraY, 0);
-        camera.update();
-        batch.setProjectionMatrix(camera.combined);
+        configureWorldCamera();
         batch.begin();
 
+        beginGroundTransform();
         renderBackground();
+        endGroundTransform();
 
         if (Settings.showDevelopmentInfo && Settings.showBallPredictions) {
             drawBallPredictions(ball);
         }
 
+        if (viewTransform.isHorizontal()) {
+            drawHorizontalGoalBacks();
+        }
+
         renderSprites();
 
-        redrawBallShadowsOverGoals(scene.ball);
-        redrawBallOverTopGoal(ballSprite);
+        if (viewTransform.isHorizontal()) {
+            drawHorizontalGoalFronts();
+            redrawBallShadowsOverGoals(scene.ball);
+            redrawBallOverHorizontalGoals(ballSprite);
+        } else {
+            redrawBallShadowsOverGoals(scene.ball);
+            redrawBallOverTopGoal(ballSprite);
 
-        // redraw bottom goal
-        batch.draw(Assets.goalBottom, Const.GOAL_BTM_X, Const.GOAL_BTM_Y, 146, 56, 0, 0, 146, 56, false, true);
+            // redraw bottom goal
+            batch.draw(Assets.goalBottom, Const.GOAL_BTM_X, Const.GOAL_BTM_Y, 146, 56, 0, 0, 146, 56, false, true);
 
-        redrawBallShadowsOverGoals(scene.ball);
-        redrawBallOverBottomGoal(ballSprite);
+            redrawBallShadowsOverGoals(scene.ball);
+            redrawBallOverBottomGoal(ballSprite);
+        }
 
         if (scene.settings.weatherStrength != Weather.Strength.NONE) {
             switch (scene.settings.weatherEffect) {
@@ -205,7 +218,11 @@ public class TrainingRenderer extends SceneRenderer<Training> {
                     FrameData d = player.currentData;
                     if (d.isVisible) {
                         Integer[] origin = Assets.keeperOrigins[d.fmy][d.fmx];
-                        batch.draw(Assets.keeperShadow[d.fmx][d.fmy][0], d.x - origin[0] + 0.65f * d.z, d.y - origin[1] + 0.46f * d.z);
+                        batch.draw(
+                            Assets.keeperShadow[d.fmx][d.fmy][0],
+                            d.x - origin[0] + 0.65f * d.z,
+                            d.y - origin[1] + 0.46f * d.z
+                        );
                         if (scene.settings.time == MatchSettings.Time.NIGHT) {
                             // TODO activate after getting keeper shadows
                             // batch.draw(Assets.keeperShadow[d.fmx][d.fmy][1], d.x - 24 - 0.65f * d.z, d.y - 34 + 0.46f * d.z);
@@ -227,7 +244,11 @@ public class TrainingRenderer extends SceneRenderer<Training> {
                             Integer[] origin = Assets.playerOrigins[d.fmy][d.fmx];
                             float mX = (i == 0 || i == 3) ? 0.65f : -0.65f;
                             float mY = (i == 0 || i == 1) ? 0.46f : -0.46f;
-                            batch.draw(Assets.playerShadow[d.fmx][d.fmy][i], d.x - origin[0] + mX * d.z, d.y - origin[1] + 5 + mY * d.z);
+                            batch.draw(
+                                Assets.playerShadow[d.fmx][d.fmy][i],
+                                d.x - origin[0] + mX * d.z,
+                                d.y - origin[1] + 5 + mY * d.z
+                            );
                         }
                     }
                 }

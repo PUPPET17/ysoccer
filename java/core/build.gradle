@@ -27,6 +27,14 @@ tasks.register('controllerRegressionTest', JavaExec) {
 }
 check.dependsOn controllerRegressionTest
 
+// Match-view projection tests require neither a graphics context nor physical input hardware.
+tasks.register('matchViewRegressionTest', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.match.MatchViewTransformRegressionTest'
+}
+check.dependsOn matchViewRegressionTest
+
 tasks.register('warningRegressionTest', JavaExec) {
   dependsOn testClasses
   classpath = sourceSets.test.runtimeClasspath
@@ -42,3 +50,12 @@ tasks.register('goalsRegressionTest', JavaExec) {
   mainClass = 'com.ygames.ysoccer.match.GoalsRegressionTest'
 }
 check.dependsOn goalsRegressionTest
+
+// Optional fixed-seed balance report; it reads bundled squads without changing saved games.
+tasks.register('goalsCalibrationReport', JavaExec) {
+  dependsOn testClasses
+  classpath = sourceSets.test.runtimeClasspath
+  mainClass = 'com.ygames.ysoccer.match.GoalsCalibrationReport'
+  args rootProject.file('assets/data/teams').absolutePath,
+    layout.buildDirectory.file('reports/goals-calibration.md').get().asFile.absolutePath
+}

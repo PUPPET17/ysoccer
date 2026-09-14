@@ -34,7 +34,7 @@ class PlayerStateKick extends PlayerState {
 
         float angle;
         if (player.inputDevice.value) {
-            angle = player.inputDevice.angle;
+            angle = player.inputAngle();
         } else {
             angle = player.kickAngle;
         }

@@ -106,15 +106,35 @@ public abstract class SceneCamera<SceneT extends Scene<?, ?>> {
         t.y = EMath.clamp(t.y, tyMin, tyMax);
     }
 
-    void setScreenParameters(int screenWidth, int screenHeight, int zoom) {
+    void setScreenParameters(int screenWidth, int screenHeight, int zoom, MatchViewTransform viewTransform) {
         x += width / 2;
         y += height / 2;
-        width = screenWidth / (zoom / 100.0f);
-        height = screenHeight / (zoom / 100.0f);
+        float viewWidth = screenWidth / (zoom / 100.0f);
+        float viewHeight = screenHeight / (zoom / 100.0f);
+        width = viewTransform.worldViewportWidth(viewWidth, viewHeight);
+        height = viewTransform.worldViewportHeight(viewWidth, viewHeight);
         x -= width / 2;
         y -= height / 2;
         dx = CENTER_X - width / 2;
         dy = CENTER_Y - height / 2;
+    }
+
+    /** Converts a replayed viewport origin into its current world-space center. */
+    float worldCenterX(float viewportOriginX) {
+        return viewportOriginX - dx;
+    }
+
+    /** Converts a replayed viewport origin into its current world-space center. */
+    float worldCenterY(float viewportOriginY) {
+        return viewportOriginY - dy;
+    }
+
+    float getWorldViewportWidth() {
+        return width;
+    }
+
+    float getWorldViewportHeight() {
+        return height;
     }
 
     public float getTargetDistance() {

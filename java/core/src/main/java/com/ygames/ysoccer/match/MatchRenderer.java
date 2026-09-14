@@ -38,38 +38,42 @@ public class MatchRenderer extends SceneRenderer<Match> {
 
         resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
-        match.camera.x = 0.5f * (Const.PITCH_W - screenWidth / (zoom / 100.0f));
+        match.camera.x = 0.5f * (Const.PITCH_W - match.camera.getWorldViewportWidth());
         match.camera.y = 0;
         for (int i = 0; i < Const.REPLAY_SUBFRAMES; i++) {
             match.vCameraX[i] = Math.round(match.camera.x);
             match.vCameraY[i] = Math.round(match.camera.y);
         }
 
-        ballSprite = new BallSprite(glGraphics, match.ball);
+        ballSprite = new BallSprite(glGraphics, match.ball, viewTransform);
         allSprites.add(ballSprite);
         for (int t = HOME; t <= AWAY; t++) {
-            CoachSprite coachSprite = new CoachSprite(glGraphics, match.team[t].coach);
+            CoachSprite coachSprite = new CoachSprite(glGraphics, match.team[t].coach, viewTransform);
             allSprites.add(coachSprite);
             int len = match.team[t].lineup.size();
             for (int i = 0; i < len; i++) {
-                PlayerSprite playerSprite = new PlayerSprite(glGraphics, match.team[t].lineup.get(i));
+                PlayerSprite playerSprite = new PlayerSprite(glGraphics, match.team[t].lineup.get(i), viewTransform);
                 allSprites.add(playerSprite);
             }
         }
 
         for (int xSide = -1; xSide <= 1; xSide += 2) {
             for (int ySide = -1; ySide <= 1; ySide += 2) {
-                allSprites.add(new JumperSprite(glGraphics, xSide, ySide));
+                allSprites.add(new JumperSprite(glGraphics, xSide, ySide, viewTransform));
             }
         }
 
         cornerFlagSprites = new CornerFlagSprite[4];
         for (int i = 0; i < 4; i++) {
-            cornerFlagSprites[i] = new CornerFlagSprite(glGraphics, scene.settings, i / 2 * 2 - 1, i % 2 * 2 - 1);
+            cornerFlagSprites[i] = new CornerFlagSprite(
+                glGraphics, scene.settings, i / 2 * 2 - 1, i % 2 * 2 - 1, viewTransform
+            );
             allSprites.add(cornerFlagSprites[i]);
         }
-        allSprites.add(new GoalTopA(glGraphics));
-        allSprites.add(new GoalTopB(glGraphics));
+        if (!viewTransform.isHorizontal()) {
+            allSprites.add(new GoalTopA(glGraphics, viewTransform));
+            allSprites.add(new GoalTopB(glGraphics, viewTransform));
+        }
 
         Assets.crowdRenderer.setMaxRank(match.rank);
     }
@@ -81,13 +85,12 @@ public class MatchRenderer extends SceneRenderer<Match> {
 
         gl.glEnable(GL20.GL_BLEND);
         gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        camera.setToOrtho(true, Gdx.graphics.getWidth() * 100f / zoom, Gdx.graphics.getHeight() * 100f / zoom);
-        camera.translate(-Const.CENTER_X + scene.cameraX, -Const.CENTER_Y + scene.cameraY, 0);
-        camera.update();
-        batch.setProjectionMatrix(camera.combined);
+        configureWorldCamera();
         batch.begin();
 
+        beginGroundTransform();
         renderBackground();
+        endGroundTransform();
 
         if (Settings.showDevelopmentInfo && Settings.showBallZones) {
             drawBallZones();
@@ -97,18 +100,28 @@ public class MatchRenderer extends SceneRenderer<Match> {
             drawBallPredictions(ball);
         }
 
-        Assets.crowdRenderer.draw(batch);
+        Assets.crowdRenderer.draw(batch, viewTransform);
+
+        if (viewTransform.isHorizontal()) {
+            drawHorizontalGoalBacks();
+        }
 
         renderSprites();
 
-        redrawBallShadowsOverGoals(scene.ball);
-        redrawBallOverTopGoal(ballSprite);
+        if (viewTransform.isHorizontal()) {
+            drawHorizontalGoalFronts();
+            redrawBallShadowsOverGoals(scene.ball);
+            redrawBallOverHorizontalGoals(ballSprite);
+        } else {
+            redrawBallShadowsOverGoals(scene.ball);
+            redrawBallOverTopGoal(ballSprite);
 
-        // redraw bottom goal
-        batch.draw(Assets.goalBottom, Const.GOAL_BTM_X, Const.GOAL_BTM_Y, 146, 56, 0, 0, 146, 56, false, true);
+            // redraw bottom goal
+            batch.draw(Assets.goalBottom, Const.GOAL_BTM_X, Const.GOAL_BTM_Y, 146, 56, 0, 0, 146, 56, false, true);
 
-        redrawBallShadowsOverGoals(scene.ball);
-        redrawBallOverBottomGoal(ballSprite);
+            redrawBallShadowsOverGoals(scene.ball);
+            redrawBallOverBottomGoal(ballSprite);
+        }
 
         if (scene.settings.weatherStrength != Weather.Strength.NONE) {
             switch (scene.settings.weatherEffect) {
@@ -273,10 +286,22 @@ public class MatchRenderer extends SceneRenderer<Match> {
         shapeRenderer.begin();
         shapeRenderer.setColor(0xAAAA00, 0.4f);
         for (int x = 0; x < 6; x++) {
-            shapeRenderer.line((-2.5f + x) * BALL_ZONE_DX, (-3.5f) * BALL_ZONE_DY, (-2.5f + x) * BALL_ZONE_DX, 3.5f * BALL_ZONE_DY);
+            float worldX = (-2.5f + x) * BALL_ZONE_DX;
+            shapeRenderer.line(
+                viewTransform.projectX(worldX, -3.5f * BALL_ZONE_DY),
+                viewTransform.groundDepth(worldX, -3.5f * BALL_ZONE_DY),
+                viewTransform.projectX(worldX, 3.5f * BALL_ZONE_DY),
+                viewTransform.groundDepth(worldX, 3.5f * BALL_ZONE_DY)
+            );
         }
         for (int y = 0; y < 8; y++) {
-            shapeRenderer.line(-2.5f * BALL_ZONE_DX, (-3.5f + y) * BALL_ZONE_DY, 2.5f * BALL_ZONE_DX, (-3.5f + y) * BALL_ZONE_DY);
+            float worldY = (-3.5f + y) * BALL_ZONE_DY;
+            shapeRenderer.line(
+                viewTransform.projectX(-2.5f * BALL_ZONE_DX, worldY),
+                viewTransform.groundDepth(-2.5f * BALL_ZONE_DX, worldY),
+                viewTransform.projectX(2.5f * BALL_ZONE_DX, worldY),
+                viewTransform.groundDepth(2.5f * BALL_ZONE_DX, worldY)
+            );
         }
         shapeRenderer.end();
         batch.begin();
@@ -299,7 +324,11 @@ public class MatchRenderer extends SceneRenderer<Match> {
                     FrameData d = player.currentData;
                     if (d.isVisible) {
                         Integer[] origin = Assets.keeperOrigins[d.fmy][d.fmx];
-                        batch.draw(Assets.keeperShadow[d.fmx][d.fmy][0], d.x - origin[0] + 0.65f * d.z, d.y - origin[1] + 0.46f * d.z);
+                        batch.draw(
+                            Assets.keeperShadow[d.fmx][d.fmy][0],
+                            d.x - origin[0] + 0.65f * d.z,
+                            d.y - origin[1] + 0.46f * d.z
+                        );
                         // TODO activate after getting keeper shadows
                         // if (scene.settings.time == MatchSettings.Time.NIGHT) {
                         // batch.draw(Assets.keeperShadow[d.fmx][d.fmy][1], d.x - 24 - 0.65f * d.z, d.y - 34 + 0.46f * d.z);
@@ -321,7 +350,11 @@ public class MatchRenderer extends SceneRenderer<Match> {
                             Integer[] origin = Assets.playerOrigins[d.fmy][d.fmx];
                             float mX = (i == 0 || i == 3) ? 0.65f : -0.65f;
                             float mY = (i == 0 || i == 1) ? 0.46f : -0.46f;
-                            batch.draw(Assets.playerShadow[d.fmx][d.fmy][i], d.x - origin[0] + mX * d.z, d.y - origin[1] + 5 + mY * d.z);
+                            batch.draw(
+                                Assets.playerShadow[d.fmx][d.fmy][i],
+                                d.x - origin[0] + mX * d.z,
+                                d.y - origin[1] + 5 + mY * d.z
+                            );
                         }
                     }
                 }
@@ -343,7 +376,13 @@ public class MatchRenderer extends SceneRenderer<Match> {
                             drawControlledPlayerMarker(player);
                             drawPlayerNumber(player);
                         } else if (Settings.showDevelopmentInfo && Settings.showPlayerNumber) {
-                            Assets.font6.draw(batch, player.number, d.x, d.y - 40 - d.z, CENTER);
+                            Assets.font6.draw(
+                                batch,
+                                player.number,
+                                Math.round(viewTransform.projectX(d.x, d.y)),
+                                Math.round(viewTransform.projectY(d.x, d.y, d.z) - 40),
+                                CENTER
+                            );
                         }
                     }
                 }
@@ -498,8 +537,8 @@ public class MatchRenderer extends SceneRenderer<Match> {
 
         final int RX = 10;
         final int RY = 60;
-        final int RW = 132;
-        final int RH = 166;
+        final int RW = viewTransform.isHorizontal() ? 166 : 132;
+        final int RH = viewTransform.isHorizontal() ? 132 : 166;
 
         batch.end();
         gl.glEnable(GL20.GL_BLEND);
@@ -510,7 +549,11 @@ public class MatchRenderer extends SceneRenderer<Match> {
         shapeRenderer.setColor(0x000000, 1f);
         shapeRenderer.rect(RX, RY, 1, RH);
         shapeRenderer.rect(RX + 1, RY, RW - 2, 1);
-        shapeRenderer.rect(RX + 1, RY + RH / 2f, RW - 2, 1);
+        if (viewTransform.isHorizontal()) {
+            shapeRenderer.rect(RX + RW / 2f, RY + 1, 1, RH - 2);
+        } else {
+            shapeRenderer.rect(RX + 1, RY + RH / 2f, RW - 2, 1);
+        }
         shapeRenderer.rect(RX + 1, RY + RH - 1, RW - 2, 1);
         shapeRenderer.rect(RX + RW - 1, RY, 1, RH);
 
@@ -529,8 +572,8 @@ public class MatchRenderer extends SceneRenderer<Match> {
                 Player player = ((PlayerSprite) sprite).player;
                 FrameData d = player.currentData;
                 if (d.isVisible && d.x > -TOUCH_LINE) {
-                    int dx = RX + RW / 2 + d.x / 8;
-                    int dy = RY + RH / 2 + d.y / 8;
+                    int dx = RX + RW / 2 + (viewTransform.isHorizontal() ? d.y : d.x) / 8;
+                    int dy = RY + RH / 2 + (viewTransform.isHorizontal() ? d.x : d.y) / 8;
 
                     shapeRenderer.setColor(0x242424, 1f);
                     shapeRenderer.rect(dx - 3, dy - 3, 6, 1);
@@ -558,8 +601,8 @@ public class MatchRenderer extends SceneRenderer<Match> {
                     Player player = ((PlayerSprite) sprite).player;
                     FrameData d = player.currentData;
                     if (d.isVisible && (d.x > -TOUCH_LINE) && (player.inputDevice != player.ai)) {
-                        int dx = RX + RW / 2 + d.x / 8 + 1;
-                        int dy = RY + RH / 2 + d.y / 8 - 10;
+                        int dx = RX + RW / 2 + (viewTransform.isHorizontal() ? d.y : d.x) / 8 + 1;
+                        int dy = RY + RH / 2 + (viewTransform.isHorizontal() ? d.x : d.y) / 8 - 10;
 
                         int f0 = player.number % 10;
                         int f1 = (player.number - f0) / 10 % 10;
@@ -1178,14 +1221,26 @@ public class MatchRenderer extends SceneRenderer<Match> {
     void drawYellowCard(Player player) {
         FrameData d = player.currentData;
         if ((scene.stateTimer % (SECOND / 2)) > SECOND / 4) {
-            Assets.font6.draw(batch, "" + (char) 14, d.x + 1, d.y - 40, CENTER);
+            Assets.font6.draw(
+                batch,
+                "" + (char) 14,
+                Math.round(viewTransform.projectX(d.x, d.y) + 1),
+                Math.round(viewTransform.projectY(d.x, d.y, d.z) - 40),
+                CENTER
+            );
         }
     }
 
     void drawRedCard(Player player) {
         FrameData d = player.currentData;
         if ((scene.stateTimer % (SECOND / 2)) > SECOND / 4) {
-            Assets.font6.draw(batch, "" + (char) 15, d.x + 1, d.y - 40, CENTER);
+            Assets.font6.draw(
+                batch,
+                "" + (char) 15,
+                Math.round(viewTransform.projectX(d.x, d.y) + 1),
+                Math.round(viewTransform.projectY(d.x, d.y, d.z) - 40),
+                CENTER
+            );
         }
     }
 }

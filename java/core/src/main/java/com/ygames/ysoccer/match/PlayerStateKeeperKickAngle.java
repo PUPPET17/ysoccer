@@ -15,9 +15,9 @@ class PlayerStateKeeperKickAngle extends PlayerState {
         super.doActions();
 
         //prevent kicking backwards
-        if (player.inputDevice.y1 != ball.ySide) {
+        if (player.inputY() != ball.ySide) {
             if (player.inputDevice.value) {
-                player.a = player.inputDevice.angle;
+                player.a = player.inputAngle();
             }
         }
 

@@ -8,29 +8,35 @@ import java.util.Comparator;
 abstract class Sprite {
 
     GLGraphics glGraphics;
+    final MatchViewTransform viewTransform;
 
     TextureRegion textureRegion;
     int x;
     int y;
     int z;
 
-    Sprite(GLGraphics glGraphics) {
+    Sprite(GLGraphics glGraphics, MatchViewTransform viewTransform) {
         this.glGraphics = glGraphics;
+        this.viewTransform = viewTransform;
     }
 
     public void draw(int subframe) {
-        glGraphics.batch.draw(textureRegion, x, y - z);
+        glGraphics.batch.draw(
+            textureRegion,
+            viewTransform.projectX(x, y),
+            viewTransform.projectY(x, y, z)
+        );
     }
 
-    public int getY() {
-        return y;
+    public float getDepth() {
+        return viewTransform.groundDepth(x, y);
     }
 
     static class SpriteComparator implements Comparator<Sprite> {
 
         @Override
         public int compare(Sprite sprite1, Sprite sprite2) {
-            return sprite1.getY() - sprite2.getY();
+            return Float.compare(sprite1.getDepth(), sprite2.getDepth());
         }
     }
 }

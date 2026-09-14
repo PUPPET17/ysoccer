@@ -37,7 +37,7 @@ class PlayerStateStandRun extends PlayerState {
         if (player.inputDevice.value) {
             player.v = player.speed
                 * (1 - Const.POSSESSION_SPEED_PENALTY * ((player == ball.owner) ? 1 : 0));
-            player.a = player.inputDevice.angle;
+            player.a = player.inputAngle();
         } else {
             player.v = 0;
         }

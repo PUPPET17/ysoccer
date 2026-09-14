@@ -10,16 +10,30 @@ import static com.ygames.ysoccer.match.Const.JUMPER_Y;
 
 class JumperSprite extends Sprite {
 
-    JumperSprite(GLGraphics glGraphics, int xSide, int ySide) {
-        super(glGraphics);
+    private final int anchorX;
+    private final int anchorY;
+
+    JumperSprite(GLGraphics glGraphics, int xSide, int ySide, MatchViewTransform viewTransform) {
+        super(glGraphics, viewTransform);
         textureRegion = new TextureRegion(Assets.jumper);
         textureRegion.flip(false, true);
-        x = xSide * JUMPER_X -1;
-        y = ySide * JUMPER_Y - JUMPER_H -1;
+        anchorX = xSide * JUMPER_X;
+        anchorY = ySide * JUMPER_Y;
+        x = anchorX - 1;
+        y = anchorY - JUMPER_H - 1;
     }
 
     @Override
-    public int getY() {
-        return y + JUMPER_H;
+    public void draw(int subframe) {
+        glGraphics.batch.draw(
+            textureRegion,
+            viewTransform.projectX(anchorX, anchorY) - 1,
+            viewTransform.projectY(anchorX, anchorY, 0) - JUMPER_H - 1
+        );
+    }
+
+    @Override
+    public float getDepth() {
+        return viewTransform.groundDepth(anchorX, anchorY);
     }
 }

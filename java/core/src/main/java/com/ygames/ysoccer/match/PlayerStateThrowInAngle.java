@@ -32,8 +32,8 @@ class PlayerStateThrowInAngle extends PlayerState {
             animationCountdown--;
         }
 
-        int x = player.inputDevice.x1;
-        int y = player.inputDevice.y1;
+        int x = player.inputX();
+        int y = player.inputY();
 
         // prevent throwing outside
         if (x != ball.xSide) {

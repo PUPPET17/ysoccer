@@ -37,7 +37,7 @@ class PlayerStateFreeKickSpeed extends PlayerState {
 
             float angleDiff;
             if (player.inputDevice.value) {
-                angleDiff = ((player.inputDevice.angle - kickAngle + 540) % 360) - 180;
+                angleDiff = ((player.inputAngle() - kickAngle + 540) % 360) - 180;
             } else {
                 angleDiff = 90;
             }

@@ -10,6 +10,7 @@ import com.ygames.ysoccer.framework.SoundManager;
 import com.ygames.ysoccer.gui.Button;
 import com.ygames.ysoccer.gui.Widget;
 import com.ygames.ysoccer.match.SceneRenderer;
+import com.ygames.ysoccer.match.MatchViewMode;
 import com.ygames.ysoccer.match.Weather;
 import com.ygames.ysoccer.framework.EMath;
 
@@ -70,6 +71,12 @@ class MatchOptions extends GLScreen {
         widgets.add(w);
 
         w = new CommentaryButton();
+        widgets.add(w);
+
+        w = new MatchViewLabel();
+        widgets.add(w);
+
+        w = new MatchViewButton();
         widgets.add(w);
 
         w = new ExitButton();
@@ -384,6 +391,45 @@ class MatchOptions extends GLScreen {
 
         private void toggleCommentary() {
             game.settings.commentary = !game.settings.commentary;
+            setDirty(true);
+        }
+    }
+
+    private class MatchViewLabel extends Button {
+
+        MatchViewLabel() {
+            setColor(0x76683C);
+            setGeometry(game.gui.WIDTH / 2 - 10 - 440, 540, 440, 40);
+            setText(Assets.strings.get("MATCH VIEW"), Font.Align.CENTER, Assets.font14);
+            setActive(false);
+        }
+    }
+
+    private class MatchViewButton extends Button {
+
+        MatchViewButton() {
+            setColor(0x2B4A61);
+            setGeometry(game.gui.WIDTH / 2 + 10, 540, 440, 40);
+            setText("", Font.Align.CENTER, Assets.font14);
+        }
+
+        @Override
+        public void refresh() {
+            setText(Assets.strings.get(game.settings.matchViewMode.getLabelKey()));
+        }
+
+        @Override
+        public void onFire1Down() {
+            rotateView(1);
+        }
+
+        @Override
+        public void onFire2Down() {
+            rotateView(-1);
+        }
+
+        private void rotateView(int direction) {
+            game.settings.matchViewMode = EMath.rotate(game.settings.matchViewMode, MatchViewMode.class, direction);
             setDirty(true);
         }
     }

@@ -9,8 +9,8 @@ import static com.ygames.ysoccer.match.Const.GOAL_LINE;
 
 class GoalTopB extends Sprite {
 
-    GoalTopB(GLGraphics glGraphics) {
-        super(glGraphics);
+    GoalTopB(GLGraphics glGraphics, MatchViewTransform viewTransform) {
+        super(glGraphics, viewTransform);
         textureRegion = new TextureRegion(Assets.goalTopB);
         textureRegion.flip(false, true);
         x = -69;
@@ -18,7 +18,7 @@ class GoalTopB extends Sprite {
     }
 
     @Override
-    public int getY() {
-        return -GOAL_LINE - GOAL_DEPTH;
+    public float getDepth() {
+        return viewTransform.groundDepth(0, -GOAL_LINE - GOAL_DEPTH);
     }
 }

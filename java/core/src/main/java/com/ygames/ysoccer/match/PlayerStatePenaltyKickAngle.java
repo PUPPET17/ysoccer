@@ -45,13 +45,13 @@ class PlayerStatePenaltyKickAngle extends PlayerState {
     }
 
     private boolean controlsAreTargetingTheGoal() {
-        return player.inputDevice.y1 == ball.ySide;
+        return player.inputY() == ball.ySide;
     }
 
     private void moveToRequestedAngle(float turningSpeed) {
         final int delta = 5;
         if (player.inputDevice.value) {
-            int targetAngle = (player.inputDevice.angle + 360) % 360;
+            int targetAngle = (player.inputAngle() + 360) % 360;
             switch (targetAngle) {
                 case 45:
                     player.a = Math.max(player.a - turningSpeed, 45 + delta);

@@ -41,6 +41,28 @@ USB/Bluetooth reconnection, and two Xbox controllers connected at once.
 `:core:warningRegressionTest` checks the competition-loss messages in all bundled translations;
 it is included in `:core:check` as well.
 
+## Automatic match scores
+
+Automatic results use `MatchScoreSimulator`: the original attack/defense score curve
+supplies the expected goals, the opposing starting goalkeeper modifies that rate,
+and a Poisson draw supplies the score. Goalkeeper value 28 is the reference; an
+outfield player in the starting goalkeeper slot is treated as value 0. Substitutes
+do not affect the goalkeeper adjustment. These are game balance rules, not a model
+fitted to real match results.
+
+Only leagues currently apply the 8% home expected-goals boost. Other competitions
+use the neutral compatibility entry until they define the venue explicitly.
+Extra time uses 30/90 of the normal-time rate. The 90-minute mean is bounded to
+0.05–5; individual scores are not capped at six. Stored match scores keep their
+existing format. Existing completed matches are not recalculated.
+
+Run `gradlew.bat :core:goalsRegressionTest` for the headless score regression checks,
+also included in `:core:check`. Run `gradlew.bat :core:goalsCalibrationReport` to
+compare the models using the bundled rated squads and a fixed seed. The generated
+report is written to `core/build/reports/goals-calibration.md`; the checked-in
+[calibration snapshot](docs/goals-calibration.md) records the initial parameter
+comparison, including the source squads and sampling assumptions.
+
 ## Gradle
 
 This project uses [Gradle](https://gradle.org/) to manage dependencies.

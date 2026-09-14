@@ -5,6 +5,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.utils.Json;
+import com.ygames.ysoccer.match.MatchViewMode;
 import com.ygames.ysoccer.match.Weather;
 
 import java.util.ArrayList;
@@ -34,6 +35,8 @@ public class Settings {
     public String currency;
     public int weatherMaxStrength;
     public int zoom;
+    /** Local presentation used when a new offline match or training session is created. */
+    public MatchViewMode matchViewMode;
     public boolean radar;
     public boolean autoReplays;
     public int soundVolume;
@@ -92,6 +95,7 @@ public class Settings {
         benchSize = preferences.getInteger("benchSize", 5);
         weatherMaxStrength = preferences.getInteger("weatherMaxStrength", Weather.Strength.LIGHT);
         zoom = preferences.getInteger("zoom", 100);
+        matchViewMode = MatchViewMode.fromPreference(preferences.getString("matchViewMode", null));
         radar = preferences.getBoolean("radar", true);
         autoReplays = preferences.getBoolean("autoReplays", true);
         soundVolume = preferences.getInteger("soundVolume", 40);
@@ -148,6 +152,7 @@ public class Settings {
         preferences.putInteger("benchSize", benchSize);
         preferences.putInteger("weatherMaxStrength", weatherMaxStrength);
         preferences.putInteger("zoom", zoom);
+        preferences.putString("matchViewMode", matchViewMode.name());
         preferences.putBoolean("radar", radar);
         preferences.putBoolean("autoReplays", autoReplays);
         preferences.putInteger("soundVolume", soundVolume);

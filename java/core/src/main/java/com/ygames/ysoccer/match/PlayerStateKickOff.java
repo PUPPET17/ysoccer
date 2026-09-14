@@ -17,9 +17,9 @@ class PlayerStateKickOff extends PlayerState {
         scene.setBallOwner(player);
 
         // prevent kicking backwards
-        if (player.inputDevice.y1 != player.team.side) {
+        if (player.inputY() != player.team.side) {
             if (player.inputDevice.value) {
-                player.a = player.inputDevice.angle;
+                player.a = player.inputAngle();
                 player.x = ball.x - 7 * EMath.cos(player.a) + 1;
                 player.y = ball.y - 7 * EMath.sin(player.a) + 1;
             }

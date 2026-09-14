@@ -28,10 +28,18 @@ public class CrowdRenderer {
         maxRank = Math.max(0, l);
     }
 
-    void draw(SpriteBatch batch) {
+    void draw(SpriteBatch batch, MatchViewTransform viewTransform) {
         for (Position position : positions) {
             if (position.rank <= maxRank) {
-                batch.draw(Assets.crowd[position.type], position.x, position.y);
+                float width = Assets.crowd[position.type].getRegionWidth();
+                float height = Assets.crowd[position.type].getRegionHeight();
+                float anchorX = position.x + width / 2f;
+                float anchorY = position.y + height;
+                batch.draw(
+                    Assets.crowd[position.type],
+                    viewTransform.projectX(anchorX, anchorY) - width / 2f,
+                    viewTransform.projectY(anchorX, anchorY, 0) - height
+                );
             }
         }
     }

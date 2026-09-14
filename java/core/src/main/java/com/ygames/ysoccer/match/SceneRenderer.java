@@ -45,6 +45,7 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
     final GLSpriteBatch batch;
     final protected GLShapeRenderer shapeRenderer;
     final OrthographicCamera camera;
+    final MatchViewTransform viewTransform;
     int screenWidth;
     int screenHeight;
     int zoom;
@@ -70,6 +71,7 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
         this.batch = glGraphics.batch;
         this.shapeRenderer = glGraphics.shapeRenderer;
         this.camera = glGraphics.camera;
+        this.viewTransform = scene.settings.getViewTransform();
     }
 
     abstract public void render();
@@ -84,19 +86,48 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
 
         screenWidth = width;
         screenHeight = height;
-        float zoomMin = width / (VISIBLE_FIELD_WIDTH_MAX * 2 * Const.TOUCH_LINE);
-        float zoomOpt = width / (VISIBLE_FIELD_WIDTH_OPT * 2 * Const.TOUCH_LINE);
-        float zoomMax = width / (VISIBLE_FIELD_WIDTH_MIN * 2 * Const.TOUCH_LINE);
+        float zoomMin = viewTransform.fitScale(width, height, VISIBLE_FIELD_WIDTH_MAX);
+        float zoomOpt = viewTransform.fitScale(width, height, VISIBLE_FIELD_WIDTH_OPT);
+        float zoomMax = viewTransform.fitScale(width, height, VISIBLE_FIELD_WIDTH_MIN);
         zoom = 20 * (int) (5.0f * Math.min(Math.max(0.01f * scene.settings.zoom * zoomOpt, zoomMin), zoomMax));
 
-        scene.camera.setScreenParameters(screenWidth, screenHeight, zoom);
+        scene.camera.setScreenParameters(screenWidth, screenHeight, zoom, viewTransform);
 
         guiHeight = guiWidth * height / width;
     }
 
-    void renderSprites() {
+    /** Configures the shared orthographic camera in projected match-view coordinates. */
+    void configureWorldCamera() {
+        float viewWidth = Gdx.graphics.getWidth() * 100f / zoom;
+        float viewHeight = Gdx.graphics.getHeight() * 100f / zoom;
+        camera.setToOrtho(true, viewWidth, viewHeight);
+        float worldCenterX = scene.camera.worldCenterX(scene.cameraX);
+        float worldCenterY = scene.camera.worldCenterY(scene.cameraY);
+        camera.position.set(
+            viewTransform.projectX(worldCenterX, worldCenterY),
+            viewTransform.groundDepth(worldCenterX, worldCenterY),
+            0
+        );
+        camera.update();
+        batch.setProjectionMatrix(camera.combined);
+    }
 
+    /** Applies the affine transform only to the reusable stadium artwork. */
+    void beginGroundTransform() {
+        batch.setTransformMatrix(viewTransform.getGroundMatrix());
+    }
+
+    /** Restores upright drawing for players, props, weather and overlays. */
+    void endGroundTransform() {
+        batch.setTransformMatrix(viewTransform.getIdentityMatrix());
+    }
+
+    void renderSprites() {
+        // Shadows lie on the pitch plane, so unlike upright actors their artwork receives the
+        // complete affine ground transform (including horizontal depth compression).
+        beginGroundTransform();
         drawShadows();
+        endGroundTransform();
 
         allSprites.sort(spriteComparator);
 
@@ -114,8 +145,8 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
             float mX = (i == 0 || i == 3) ? 0.65f : -0.65f;
             float oY = -3;
             float mY = (i == 0 || i == 1) ? 0.46f : -0.46f;
-            float x = d.x + oX + mX * d.z;
-            float y = d.y + oY + mY * d.z;
+            float shadowX = d.x + oX + mX * d.z;
+            float shadowY = d.y + oY + mY * d.z;
 
             boolean overTheGoal = false;
             if (d.z > CROSSBAR_H) {
@@ -123,26 +154,39 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
                 float y1 = d.y + oY + mY * (d.z - CROSSBAR_H);
                 if (isInsideGoal(x1 + BALL_R, y1 + BALL_R)) {
                     overTheGoal = true;
-                    x = x1;
-                    y = y1 - CROSSBAR_H;
+                    shadowX = d.x + oX + mX * (d.z - CROSSBAR_H);
+                    shadowY = d.y + oY + mY * (d.z - CROSSBAR_H);
+                    if (viewTransform.isHorizontal()) {
+                        // The batch currently transforms the ground plane. Feed the inverse depth
+                        // offset so the goal-roof shadow still rises vertically on screen.
+                        shadowX -= CROSSBAR_H / MatchViewTransform.HORIZONTAL_DEPTH_SCALE;
+                    } else {
+                        shadowY -= CROSSBAR_H;
+                    }
                 }
             }
 
             // while drawing all shadows (redrawing == false) -> draw only on-the-ground shadows
             // while redrawing ball shadows (redrawing == true) -> draw only if over the goal
             if (!overTheGoal ^ redrawing) {
-                batch.draw(Assets.ball[4], x, y);
+                batch.draw(Assets.ball[4], shadowX, shadowY);
             }
         }
     }
 
     void redrawBallShadowsOverGoals(Ball ball) {
         batch.setColor(0xFFFFFF, scene.settings.shadowAlpha);
+        beginGroundTransform();
         drawBallShadow(ball, true);
+        endGroundTransform();
         batch.setColor(0xFFFFFF, 1f);
     }
 
     void drawRain() {
+        if (viewTransform.isHorizontal()) {
+            drawHorizontalRain();
+            return;
+        }
         batch.setColor(0xFFFFFF, 0.6f);
         int subframe = scene.subframe;
         Assets.random.setSeed(1);
@@ -169,6 +213,10 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
     }
 
     void drawSnow() {
+        if (viewTransform.isHorizontal()) {
+            drawHorizontalSnow();
+            return;
+        }
         batch.setColor(0xFFFFFF, 0.7f);
 
         int subframe = scene.subframe;
@@ -191,6 +239,10 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
     }
 
     void drawFog() {
+        if (viewTransform.isHorizontal()) {
+            drawHorizontalFog();
+            return;
+        }
         batch.setColor(0xFFFFFF, 0.25f * scene.settings.weatherStrength);
 
         int subframe = scene.subframe;
@@ -211,6 +263,59 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
         batch.setColor(0xFFFFFF, 1f);
     }
 
+    private void drawHorizontalRain() {
+        batch.setColor(0xFFFFFF, 0.6f);
+        int width = Math.max(1, (int) Math.ceil(camera.viewportWidth) + 256);
+        int height = Math.max(1, (int) Math.ceil(camera.viewportHeight) + 256);
+        int left = (int) Math.floor(camera.position.x - camera.viewportWidth / 2f) - 128;
+        int top = (int) Math.floor(camera.position.y - camera.viewportHeight / 2f) - 128;
+        Assets.random.setSeed(1);
+        for (int i = 1; i <= 40 * scene.settings.weatherStrength; i++) {
+            int frame = Assets.random.nextInt(4);
+            int x = Assets.random.nextInt(width);
+            int y = (Assets.random.nextInt(height) + 4 * scene.subframe / GLGame.SUBFRAMES) % height;
+            batch.draw(Assets.rain[frame], left + x, top + y);
+        }
+        Assets.random.setSeed(System.currentTimeMillis());
+        batch.setColor(0xFFFFFF, 1f);
+    }
+
+    private void drawHorizontalSnow() {
+        batch.setColor(0xFFFFFF, 0.7f);
+        int width = Math.max(1, (int) Math.ceil(camera.viewportWidth) + 256);
+        int height = Math.max(1, (int) Math.ceil(camera.viewportHeight) + 256);
+        int left = (int) Math.floor(camera.position.x - camera.viewportWidth / 2f) - 128;
+        int top = (int) Math.floor(camera.position.y - camera.viewportHeight / 2f) - 128;
+        Assets.random.setSeed(1);
+        for (int i = 1; i <= 30 * scene.settings.weatherStrength; i++) {
+            int sprite = i % 3;
+            int phase = Assets.random.nextInt(360);
+            float x = Assets.random.nextInt(width)
+                + 30 * EMath.sin(360f * scene.subframe / Const.REPLAY_SUBFRAMES + phase);
+            int y = (Assets.random.nextInt(height) + 2 * scene.subframe / GLGame.SUBFRAMES) % height;
+            batch.draw(Assets.snow[sprite], left + x, top + y);
+        }
+        Assets.random.setSeed(System.currentTimeMillis());
+        batch.setColor(0xFFFFFF, 1f);
+    }
+
+    private void drawHorizontalFog() {
+        batch.setColor(0xFFFFFF, 0.25f * scene.settings.weatherStrength);
+        final int tileWidth = 256;
+        float left = camera.position.x - camera.viewportWidth / 2f - tileWidth;
+        float top = camera.position.y - camera.viewportHeight / 2f - tileWidth;
+        float startX = tileWidth * (float) Math.floor(left / tileWidth);
+        float startY = tileWidth * (float) Math.floor(top / tileWidth);
+        float offsetX = (1f * scene.subframe / GLGame.SUBFRAMES) % tileWidth;
+        float offsetY = (2f * scene.subframe / GLGame.SUBFRAMES) % tileWidth;
+        for (float x = startX; x < left + camera.viewportWidth + 3 * tileWidth; x += tileWidth) {
+            for (float y = startY; y < top + camera.viewportHeight + 3 * tileWidth; y += tileWidth) {
+                batch.draw(Assets.fog, x + offsetX, y + offsetY, 256, 256, 0, 0, 256, 256, false, true);
+            }
+        }
+        batch.setColor(0xFFFFFF, 1f);
+    }
+
     void drawBallPredictions(Ball ball) {
         batch.end();
         shapeRenderer.setAutoShapeType(true);
@@ -220,19 +325,19 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
         shapeRenderer.setColor(255, 255, 255, 255);
         for (int frm = 0; frm < Const.BALL_PREDICTION; frm += 10) {
             Vector3 p = ball.predictionL[frm];
-            shapeRenderer.circle(p.x, p.y, 1);
+            shapeRenderer.circle(viewTransform.projectX(p.x, p.y), viewTransform.groundDepth(p.x, p.y), 1);
         }
 
         shapeRenderer.setColor(255, 255, 0, 255);
         for (int frm = 0; frm < Const.BALL_PREDICTION; frm += 10) {
             Vector3 p = ball.prediction[frm];
-            shapeRenderer.circle(p.x, p.y, 1);
+            shapeRenderer.circle(viewTransform.projectX(p.x, p.y), viewTransform.groundDepth(p.x, p.y), 1);
         }
 
         shapeRenderer.setColor(255, 0, 0, 255);
         for (int frm = 0; frm < Const.BALL_PREDICTION; frm += 10) {
             Vector3 p = ball.predictionR[frm];
-            shapeRenderer.circle(p.x, p.y, 1);
+            shapeRenderer.circle(viewTransform.projectX(p.x, p.y), viewTransform.groundDepth(p.x, p.y), 1);
         }
 
         shapeRenderer.end();
@@ -364,21 +469,93 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
         }
     }
 
+    /** Draws the reusable wire net and rear goal frame behind horizontal-view actors. */
+    void drawHorizontalGoalBacks() {
+        batch.end();
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(0.78f, 0.82f, 0.86f, 0.72f);
+        drawHorizontalGoalBack(-1);
+        drawHorizontalGoalBack(1);
+        shapeRenderer.end();
+        batch.begin();
+    }
+
+    /** Draws the bright front posts and crossbars over horizontal-view actors. */
+    void drawHorizontalGoalFronts() {
+        batch.end();
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(1f, 1f, 1f, 1f);
+        drawHorizontalGoalFront(-1);
+        drawHorizontalGoalFront(1);
+        shapeRenderer.end();
+        batch.begin();
+    }
+
+    private void drawHorizontalGoalBack(int ySide) {
+        float frontX = viewTransform.projectX(0, ySide * GOAL_LINE);
+        float backX = viewTransform.projectX(0, ySide * (GOAL_LINE + Const.GOAL_DEPTH));
+        float farY = viewTransform.groundDepth(-POST_X, 0);
+        float nearY = viewTransform.groundDepth(POST_X, 0);
+        float farTop = farY - CROSSBAR_H;
+        float nearTop = nearY - CROSSBAR_H;
+
+        shapeRenderer.line(backX, farY, backX, farTop);
+        shapeRenderer.line(backX, nearY, backX, nearTop);
+        shapeRenderer.line(backX, farTop, backX, nearTop);
+        shapeRenderer.line(frontX, farY, backX, farY);
+        shapeRenderer.line(frontX, nearY, backX, nearY);
+        shapeRenderer.line(frontX, farTop, backX, farTop);
+        shapeRenderer.line(frontX, nearTop, backX, nearTop);
+
+        for (int i = 1; i < 4; i++) {
+            float amount = i / 4f;
+            float x = frontX + amount * (backX - frontX);
+            shapeRenderer.line(x, farY, x, farTop);
+            shapeRenderer.line(x, nearY, x, nearTop);
+        }
+        for (int i = 1; i < 4; i++) {
+            float amount = i / 4f;
+            float y = farY + amount * (nearY - farY);
+            shapeRenderer.line(frontX, y, backX, y);
+            shapeRenderer.line(frontX, y - CROSSBAR_H, backX, y - CROSSBAR_H);
+        }
+    }
+
+    private void drawHorizontalGoalFront(int ySide) {
+        float frontX = viewTransform.projectX(0, ySide * GOAL_LINE);
+        float farY = viewTransform.groundDepth(-POST_X, 0);
+        float nearY = viewTransform.groundDepth(POST_X, 0);
+        shapeRenderer.line(frontX, farY, frontX, farY - CROSSBAR_H);
+        shapeRenderer.line(frontX, nearY, frontX, nearY - CROSSBAR_H);
+        shapeRenderer.line(frontX, farY - CROSSBAR_H, frontX, nearY - CROSSBAR_H);
+    }
+
+    void redrawBallOverHorizontalGoals(BallSprite ballSprite) {
+        FrameData d = ball.currentData;
+        if (EMath.isIn(d.x, -POST_X - BALL_R, POST_X + BALL_R)
+            && Math.abs(d.y) > GOAL_LINE
+            && d.z > CROSSBAR_H - (Math.abs(d.y) - GOAL_LINE) / 3f) {
+            ballSprite.draw(scene.subframe);
+        }
+    }
+
     void drawPlayerNumber(Player player) {
         FrameData d = player.currentData;
 
         int f0 = player.number % 10;
         int f1 = (player.number - f0) / 10 % 10;
 
-        int dx = d.x;
-        int dy = d.y - 40 - d.z;
+        float dx = viewTransform.projectX(d.x, d.y);
+        float dy = viewTransform.projectY(d.x, d.y, d.z) - 40;
 
         int w0 = 6 - ((f0 == 1) ? 2 : 1);
         int w1 = 6 - ((f1 == 1) ? 2 : 1);
 
         int fy = scene.settings.pitchType == Pitch.Type.WHITE ? 1 : 0;
         if (f1 > 0) {
-            dx = dx - (w0 + 2 + w1) / 2;
+            dx = dx - (w0 + 2 + w1) / 2f;
             batch.draw(Assets.playerNumbers[f1][fy], dx, dy, 6, 10);
             dx = dx + w1 + 2;
             batch.draw(Assets.playerNumbers[f0][fy], dx, dy, 6, 10);
@@ -394,7 +571,9 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
         }
 
         FrameData d = player.currentData;
-        float markerY = d.y - 54 - d.z;
+        float markerX = viewTransform.projectX(d.x, d.y);
+        float markerY = viewTransform.projectY(d.x, d.y, d.z) - 54;
+        float groundY = viewTransform.groundDepth(d.x, d.y);
 
         batch.end();
         shapeRenderer.setProjectionMatrix(camera.combined);
@@ -402,17 +581,17 @@ public abstract class SceneRenderer<SceneT extends Scene<?, ?>> {
         // A dark border keeps the marker readable over snow, grass, crowd, and bright kits.
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(0.08f, 0.08f, 0.08f, 1f);
-        shapeRenderer.triangle(d.x - 9, markerY - 12, d.x + 9, markerY - 12, d.x, markerY + 2);
+        shapeRenderer.triangle(markerX - 9, markerY - 12, markerX + 9, markerY - 12, markerX, markerY + 2);
         shapeRenderer.setColor(1f, 0.9f, 0f, 1f);
-        shapeRenderer.triangle(d.x - 6, markerY - 9, d.x + 6, markerY - 9, d.x, markerY);
+        shapeRenderer.triangle(markerX - 6, markerY - 9, markerX + 6, markerY - 9, markerX, markerY);
         shapeRenderer.end();
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
         shapeRenderer.setColor(0.08f, 0.08f, 0.08f, 1f);
-        shapeRenderer.circle(d.x, d.y + 3, 12, 24);
+        shapeRenderer.circle(markerX, groundY + 3, 12, 24);
         shapeRenderer.setColor(1f, 0.9f, 0f, 1f);
-        shapeRenderer.circle(d.x, d.y + 3, 10, 24);
-        shapeRenderer.circle(d.x, d.y + 3, 11, 24);
+        shapeRenderer.circle(markerX, groundY + 3, 10, 24);
+        shapeRenderer.circle(markerX, groundY + 3, 11, 24);
         shapeRenderer.end();
 
         batch.begin();

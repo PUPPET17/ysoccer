@@ -1,163 +1,229 @@
 package com.ygames.ysoccer.match;
 
+import com.badlogic.gdx.utils.Json;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.files.FileHandle;
+import java.lang.reflect.Proxy;
+import com.ygames.ysoccer.competitions.League;
+import com.ygames.ysoccer.competitions.TableRow;
+import com.ygames.ysoccer.framework.Assets;
+import com.ygames.ysoccer.gui.Label;
 import java.util.Arrays;
 import java.util.Random;
+import static com.ygames.ysoccer.match.MatchScoreSimulator.Venue.*;
 
-/** 无图形环境的自动比分回归检查，覆盖抽样边界、概率表插值和加时赛时长折算。 */
+/** 无图形环境的自动比分检查，涵盖旧版均值、守门员、场地、泊松分布及大比分存档。 */
 public final class GoalsRegressionTest {
-    /** 已验证的业务断言数量，用于在 Gradle 输出中确认检查实际执行。 */
+    /** 已执行的业务断言数量。 */
     private static int checks;
 
-    /** 执行确定性检查；失败时抛出 AssertionError，使 Gradle 任务失败。 */
+    /** 验证模拟器及比分消费链，临时战术和随机源在结束时恢复。 */
     public static void main(String[] args) {
-        tableDistributions();
-        samplingBoundaries();
-        extraTimeDistribution();
-        seededReplay();
-        System.out.println("Goals regression checks passed: " + checks);
-    }
-
-    /** 用均匀网格精确核对各档位频数，避免依赖随机波动判断是否保持原有比分风格。 */
-    private static void tableDistributions() {
-        int[][] table = Const.GOALS_WEIGHTS_BY_ATTACK_ADVANTAGE;
-        for (int row = 0; row < table.length; row++) {
-            int total = 0;
-            check(table[row].length == 7, "normal-time scores remain 0..6");
-            for (int weight : table[row]) {
-                check(weight >= 0, "goal weights are nonnegative");
-                total += weight;
-            }
-            check(total == 1000, "each advantage row totals 1000");
-            check(Arrays.equals(histogram(row, 1000), table[row]), "integer tier " + row);
-            if (row + 1 < table.length) {
-                int[] expected = new int[7];
-                for (int goal = 0; goal < expected.length; goal++) {
-                    // 在四分之一档位使用 4000 个网格点，每格仍有整数个期望样本。
-                    expected[goal] = 3 * table[row][goal] + table[row + 1][goal];
-                }
-                check(Arrays.equals(histogram(row + 0.25, 4000), expected),
-                    "fractional tier preserves unrounded weights: " + row);
-            }
-        }
-        check(Arrays.equals(histogram(-100, 1000), table[0]), "lower clamp");
-        check(Arrays.equals(histogram(100, 1000), table[table.length - 1]), "upper clamp");
-    }
-
-    /** 确认随机区间左闭右开，不返回负进球数，也不选择零权重列。 */
-    private static void samplingBoundaries() {
-        check(draw(5, false, 0) == 0, "zero random draw is a valid score");
-        check(draw(10, false, 0) == 1, "skip zero-weight first column");
-        check(draw(0, false, Math.nextDown(1.0)) == 0, "skip zero-weight tail");
-        check(draw(5, false, Math.nextDown(1.0)) == 6, "last nonzero interval");
-        check(draw(5, false, 0.219999) == 0, "just below first boundary");
-        check(draw(5, false, 0.22) == 1, "exact first boundary");
-        check(draw(5, false, 0.63) == 2, "exact second boundary");
-        check(draw(1.25, false, 0.834999) == 0, "below interpolated boundary");
-        check(draw(1.25, false, 0.835) == 1, "exact interpolated boundary");
-        check(draw(0, true, 0) == 0, "zero goals needs no extra-time draws");
-        check(draw(5, true, 0.3, Math.nextDown(1.0 / 3.0)) == 1,
-            "one normal-time goal can survive thinning");
-        check(draw(5, true, 0.3, 1.0 / 3.0) == 0, "retention boundary is exclusive");
-    }
-
-    /** 枚举每个整场进球数的全部保留组合，按概率加权核对加时赛分布和期望。 */
-    private static void extraTimeDistribution() {
-        int[] weights = Const.GOALS_WEIGHTS_BY_ATTACK_ADVANTAGE[5];
-        int cumulative = 0;
-        double totalMean = 0;
-        for (int goals = 0; goals < weights.length; goals++) {
-            double normalDraw = (cumulative + weights[goals] / 2.0) / 1000;
-            cumulative += weights[goals];
-            double[] probabilities = new double[goals + 1];
-            for (int mask = 0; mask < (1 << goals); mask++) {
-                double[] sequence = new double[goals + 1];
-                sequence[0] = normalDraw;
-                double probability = 1;
-                for (int goal = 0; goal < goals; goal++) {
-                    boolean retained = (mask & (1 << goal)) != 0;
-                    sequence[goal + 1] = retained ? 0.1 : 0.9;
-                    probability *= retained ? 1.0 / 3.0 : 2.0 / 3.0;
-                }
-                int extra = draw(5, true, sequence);
-                check(extra == Integer.bitCount(mask), "each retained goal is counted once");
-                probabilities[extra] += probability;
-            }
-            double mean = 0;
-            double mass = 0;
-            for (int extra = 0; extra < probabilities.length; extra++) {
-                mean += extra * probabilities[extra];
-                mass += probabilities[extra];
-            }
-            near(mass, 1, "extra-time probability mass");
-            near(mean, goals / 3.0, "extra-time conditional expectation");
-            totalMean += weights[goals] / 1000.0 * mean;
-            if (goals == 2) {
-                near(probabilities[0], 4.0 / 9.0, "two-goal thinning: zero");
-                near(probabilities[1], 4.0 / 9.0, "two-goal thinning: one");
-                near(probabilities[2], 1.0 / 9.0, "two-goal thinning: two");
-            }
-        }
-        near(totalMean, 0.46, "tier 5 extra-time mean is 1.38 / 3");
-    }
-
-    /** 相同种子和相同调用顺序必须能复现常规时间及加时赛比分。 */
-    private static void seededReplay() {
-        Random first = new Random(20260913L);
-        Random replay = new Random(20260913L);
-        for (int match = 0; match < 1000; match++) {
-            double factor = (match % 121) / 10.0 - 1;
-            boolean extra = match % 2 == 0;
-            int score = Match.generateGoals(factor, extra, first);
-            check(score == Match.generateGoals(factor, extra, replay), "seeded replay");
-            check(score >= 0 && score <= 6, "score range");
+        com.badlogic.gdx.Files originalFiles = Gdx.files;
+        // Assets 初始化只需创建本地路径句柄；测试无需启动后端或加载纹理。
+        Gdx.files = (com.badlogic.gdx.Files) Proxy.newProxyInstance(com.badlogic.gdx.Files.class.getClassLoader(),
+            new Class<?>[]{com.badlogic.gdx.Files.class}, (proxy, method, arguments) -> {
+                if (method.getName().equals("local")) return new FileHandle((String) arguments[0]);
+                throw new UnsupportedOperationException(method.getName());
+            });
+        Tactics originalTactics = Assets.tactics[0];
+        Random originalRandom = Assets.random;
+        try {
+            Assets.tactics[0] = new Tactics();
+            meansAndGuards();
+            keeperVenueAndDuration();
+            poissonDistribution();
+            teamsAndReplay();
+            largeScores();
+            System.out.println("Goals regression checks passed: " + checks);
+        } finally {
+            Assets.tactics[0] = originalTactics;
+            Assets.random = originalRandom;
+            Gdx.files = originalFiles;
         }
     }
 
-    /** 将随机区间等分并取中点，返回各进球数占用的网格数量。 */
-    private static int[] histogram(double factor, int samples) {
-        int[] counts = new int[7];
-        for (int sample = 0; sample < samples; sample++) {
-            counts[draw(factor, false, (sample + 0.5) / samples)]++;
+    /** 基础曲线保留旧表整数和小数档位均值，仅最低速率保护改变零端点。 */
+    private static void meansAndGuards() {
+        for (int row = 0; row <= 10; row++) {
+            near(MatchScoreSimulator.baseExpectedGoals(row), LegacyGoalsBaseline.mean(row), "old row mean");
+            if (row < 10) near(MatchScoreSimulator.baseExpectedGoals(row + 0.25),
+                0.75 * LegacyGoalsBaseline.mean(row) + 0.25 * LegacyGoalsBaseline.mean(row + 1), "fractional mean");
         }
-        return counts;
+        near(MatchScoreSimulator.baseExpectedGoals(-100), 0, "lower tier clamp");
+        near(MatchScoreSimulator.baseExpectedGoals(100), 3.7, "upper tier clamp");
+        near(expected(-100, 28, 90), 0.05, "zero tier permits rare goals");
+        near(expected(5, -99, 90), expected(5, 0, 90), "minimum keeper clamp");
+        near(expected(5, 999, 90), expected(5, 49, 90), "maximum keeper clamp");
+        near(MatchScoreSimulator.expectedGoals(100, 0, 90, HOME), 5, "maximum rate clamp");
+        rejects(() -> expected(Double.NaN, 28, 90));
+        rejects(() -> expected(Double.POSITIVE_INFINITY, 28, 90));
+        rejects(() -> expected(5, Double.POSITIVE_INFINITY, 90));
+        rejects(() -> expected(5, 28, -1));
+        rejects(() -> expected(5, 28, 121));
+        rejects(() -> expected(5, 28, Double.NaN));
+        rejects(() -> MatchScoreSimulator.samplePoisson(-1, new Random(1)));
+        rejects(() -> MatchScoreSimulator.samplePoisson(Double.NaN, new Random(1)));
+        rejects(() -> MatchScoreSimulator.samplePoisson(1000, new Random(1)));
     }
 
-    /** 使用指定随机序列抽样，并确认没有多消耗或漏消耗加时赛的逐球判定。 */
-    private static int draw(double factor, boolean extra, double... sequence) {
-        SequenceRandom random = new SequenceRandom(sequence);
-        int goals = Match.generateGoals(factor, extra, random);
-        check(random.index == sequence.length, "all expected random draws consumed");
-        return goals;
+    /** 门将越强失球越少，主场只修正主队，加时赛在速率保护后仍严格按时长缩放。 */
+    private static void keeperVenueAndDuration() {
+        near(expected(5, 28, 90), 1.38, "reference keeper");
+        near(expected(5, 28, 30), 0.46, "extra time expectation");
+        near(expected(5, 28, 0), 0, "zero duration");
+        near(MatchScoreSimulator.expectedGoals(5, 28, 90, HOME), 1.38 * 1.08, "home boost");
+        near(MatchScoreSimulator.expectedGoals(5, 28, 90, AWAY), 1.38, "no extra away penalty");
+        for (int tier = -1; tier <= 11; tier++) {
+            double previous = Double.POSITIVE_INFINITY;
+            for (int keeper = 0; keeper <= 49; keeper++) {
+                double mean = expected(tier, keeper, 90);
+                check(mean <= previous, "keeper monotonicity");
+                previous = mean;
+                near(expected(tier, keeper, 30), mean / 3, "neutral duration scaling");
+                near(MatchScoreSimulator.expectedGoals(tier, keeper, 30, HOME),
+                    MatchScoreSimulator.expectedGoals(tier, keeper, 90, HOME) / 3, "home duration scaling");
+            }
+        }
+        check(expected(5, 29, 90) < expected(5, 28, 90), "single keeper point matters");
     }
 
-    /** 概率枚举仅允许浮点运算误差，不使用宽松的统计容差。 */
+    /** 固定种子检查均值、方差和零进球率；显式序列检查无六球硬上限。 */
+    private static void poissonDistribution() {
+        check(MatchScoreSimulator.samplePoisson(0, new SequenceRandom()) == 0, "zero mean consumes no draw");
+        check(MatchScoreSimulator.samplePoisson(1.38, new SequenceRandom(0)) == 0, "zero draw");
+        double[] draws = new double[13];
+        Arrays.fill(draws, 0.99);
+        draws[12] = 0;
+        check(MatchScoreSimulator.samplePoisson(1.38, new SequenceRandom(draws)) == 12, "no score clipping");
+        for (double mean : new double[]{0.05, 0.46, 1.38, 3.7, 5, 5 * 120 / 90.0}) {
+            Random random = new Random(20260913L);
+            int samples = 200000;
+            double sum = 0, squares = 0;
+            int zeros = 0;
+            for (int sample = 0; sample < samples; sample++) {
+                int goals = MatchScoreSimulator.samplePoisson(mean, random);
+                check(goals >= 0, "nonnegative score");
+                sum += goals;
+                squares += goals * goals;
+                if (goals == 0) zeros++;
+            }
+            double observed = sum / samples;
+            double variance = squares / samples - observed * observed;
+            // 六倍标准误差容纳抽样波动；固定种子使检查每次可复现。
+            check(Math.abs(observed - mean) < 6 * Math.sqrt(mean / samples), "Poisson mean");
+            check(Math.abs(variance - mean) < 6 * Math.sqrt((mean + 2 * mean * mean) / samples), "Poisson variance");
+            double p0 = Math.exp(-mean);
+            check(Math.abs(zeros / (double) samples - p0) < 6 * Math.sqrt(p0 * (1 - p0) / samples), "zero goals");
+        }
+    }
+
+    /** 通过真实 Team 评分路径检查首发门将选择与 Match 兼容入口。 */
+    private static void teamsAndReplay() {
+        Team first = team(28), second = team(28);
+        near(MatchScoreSimulator.expectedGoals(first, second, 90, NEUTRAL),
+            MatchScoreSimulator.expectedGoals(second, first, 90, NEUTRAL), "neutral symmetry");
+        double before = MatchScoreSimulator.expectedGoals(first, second, 90, NEUTRAL);
+        Player reserve = new Player();
+        reserve.role = Player.Role.GOALKEEPER;
+        reserve.value = 49;
+        second.players.add(reserve);
+        near(MatchScoreSimulator.expectedGoals(first, second, 90, NEUTRAL), before, "reserve ignored");
+        second.players.get(0).value = 49;
+        check(MatchScoreSimulator.expectedGoals(first, second, 90, NEUTRAL) < before, "starter matters");
+        second.players.get(0).role = Player.Role.ATTACKER;
+        double standIn = MatchScoreSimulator.expectedGoals(first, second, 90, NEUTRAL);
+        second.players.get(0).role = Player.Role.GOALKEEPER;
+        second.players.get(0).value = 0;
+        near(standIn, MatchScoreSimulator.expectedGoals(first, second, 90, NEUTRAL), "outfield stand-in");
+        Random replay = new Random(83);
+        Assets.random = new Random(83);
+        for (int game = 0; game < 1000; game++) {
+            boolean extra = game % 2 == 0;
+            check(Match.generateGoals(first, second, extra)
+                == MatchScoreSimulator.generateGoals(first, second, extra ? 30 : 90, NEUTRAL, replay), "seed replay");
+        }
+        Assets.random = new Random(83);
+        replay = new Random(83);
+        check(Match.generateGoals(first, second, false, HOME)
+            == MatchScoreSimulator.generateGoals(first, second, 90, HOME, replay), "explicit venue entry");
+    }
+
+    /** 两位数比分完整保存和显示，并全部计入积分榜和射手统计。 */
+    private static void largeScores() {
+        Match match = new Match();
+        match.teams[0] = 0;
+        match.teams[1] = 1;
+        match.setResult(12, 10, Match.ResultType.AFTER_90_MINUTES);
+        match.setResult(14, 11, Match.ResultType.AFTER_EXTRA_TIME);
+        Json json = new Json();
+        Match restored = json.fromJson(Match.class, json.toJson(match));
+        check(Arrays.equals(restored.resultAfter90, new int[]{12, 10}), "normal-time score save");
+        check(Arrays.equals(restored.getResult(), new int[]{14, 11}), "extra-time score save");
+        TableRow row = new TableRow(0);
+        row.update(14, 11, 3);
+        check(row.goalsFor == 14 && row.goalsAgainst == 11 && row.points == 3, "table full score");
+        League league = new League();
+        Team scoringTeam = team(28);
+        league.generateScorers(scoringTeam, 14);
+        int scorerGoals = 0;
+        for (Player player : scoringTeam.players) scorerGoals += league.getScorerGoals(player);
+        check(scorerGoals == 14, "all goals assigned");
+        ScoreLabel label = new ScoreLabel();
+        label.setText(14);
+        check("14".equals(label.value()), "both digits displayed");
+    }
+
+    /** 建立无需美术资源的完整首发，攻防技能相同以隔离门将因素。 */
+    private static Team team(int keeperValue) {
+        Team team = new Team();
+        team.name = "TEST TEAM";
+        for (int index = 0; index < 11; index++) {
+            Player player = new Player();
+            player.name = player.shirtName = "PLAYER " + index;
+            player.team = team;
+            player.role = index == 0 ? Player.Role.GOALKEEPER : Player.Role.MIDFIELDER;
+            player.value = index == 0 ? keeperValue : 0;
+            if (index > 0) {
+                player.skills.passing = player.skills.tackling = player.skills.heading = 4;
+                player.skills.speed = player.skills.control = player.skills.shooting = player.skills.finishing = 4;
+            }
+            team.players.add(player);
+        }
+        return team;
+    }
+
+    private static double expected(double factor, double keeper, double minutes) {
+        return MatchScoreSimulator.expectedGoals(factor, keeper, minutes, NEUTRAL);
+    }
+
     private static void near(double actual, double expected, String message) {
         check(Math.abs(actual - expected) < 1e-12, message + ": " + actual);
     }
 
-    private static void check(boolean condition, String message) {
-        checks++;
-        if (!condition) {
-            throw new AssertionError(message);
-        }
+    private static void rejects(Runnable action) {
+        try { action.run(); } catch (IllegalArgumentException expected) { checks++; return; }
+        throw new AssertionError("invalid input was accepted");
     }
 
-    /** 提供可精确命中累计概率边界的随机序列；额外请求随机值会使测试立即失败。 */
+    private static void check(boolean condition, String message) {
+        checks++;
+        if (!condition) throw new AssertionError(message);
+    }
+
+    /** 验证整数转换，不初始化字体纹理或 OpenGL。 */
+    private static final class ScoreLabel extends Label {
+        String value() { return text; }
+    }
+
+    /** 精确控制泊松乘积何时结束，额外消费随机值立即失败。 */
     private static final class SequenceRandom extends Random {
-        /** 先提供整场比分抽样值，随后提供每个进球的加时赛保留判定值。 */
         private final double[] sequence;
-        /** 下一个待消费的随机值位置。 */
         private int index;
-
-        private SequenceRandom(double[] sequence) {
-            this.sequence = sequence;
-        }
-
+        private SequenceRandom(double... sequence) { this.sequence = sequence; }
         @Override
         public double nextDouble() {
-            if (index >= sequence.length) {
-                throw new AssertionError("unexpected random draw");
-            }
+            if (index >= sequence.length) throw new AssertionError("unexpected random draw");
             return sequence[index++];
         }
     }

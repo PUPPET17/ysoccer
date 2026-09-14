@@ -22,7 +22,7 @@ class PlayerStateFreeKickAngle extends PlayerState {
         super.doActions();
 
         if (player.inputDevice.value) {
-            player.a = player.inputDevice.angle;
+            player.a = player.inputAngle();
         }
         player.x = ball.x - 7 * EMath.cos(player.a);
         player.y = ball.y - 7 * EMath.sin(player.a);

@@ -33,7 +33,7 @@ class PlayerStateHead extends PlayerState {
                     EventManager.publish(new BallKickEvent(0.1f * (1 + 0.03f * timer)));
 
                     if (player.inputDevice.value) {
-                        ball.a = player.inputDevice.angle;
+                        ball.a = player.inputAngle();
                     } else {
                         ball.a = player.a;
                     }

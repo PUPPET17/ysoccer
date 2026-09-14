@@ -11,6 +11,7 @@ import com.ygames.ysoccer.framework.InputDevice;
 import com.ygames.ysoccer.match.Match;
 import com.ygames.ysoccer.match.MatchCamera;
 import com.ygames.ysoccer.match.MatchRenderer;
+import com.ygames.ysoccer.match.MatchViewMode;
 import com.ygames.ysoccer.match.Player;
 import com.ygames.ysoccer.network.dto.MatchSetupDto;
 import com.ygames.ysoccer.network.mappers.MatchMapper;
@@ -50,6 +51,8 @@ public class OnlineMatch extends GLScreen {
 
     public void setup(MatchSetupDto matchSetupDto) {
         match = MatchMapper.fromDto(matchSetupDto.matchDto);
+        // Horizontal input mapping is intentionally offline-only in the prototype.
+        match.getSettings().viewMode = MatchViewMode.VERTICAL;
         match.setCamera(new MatchCamera(match));
         matchRenderer = new MatchRenderer(game.glGraphics, match);
         game.glGraphics.light = 0;

@@ -12,7 +12,6 @@ import com.ygames.ysoccer.framework.InputDeviceList;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 import static com.ygames.ysoccer.framework.EMath.rotate;
 import static com.ygames.ysoccer.match.Const.BALL_PREDICTION;
@@ -303,58 +302,30 @@ public class Match extends Scene<MatchFsm, MatchState> implements Json.Serializa
     /**
      * 根据双方首发球员的攻防评分，抽取自动比赛中本队在指定时段的进球数。
      *
+     * <p>兼容入口按中立场处理；具有明确主场规则的赛事应调用带场地身份的重载。</p>
+     *
      * @param teamFor 本次生成进球数的球队，必须具有可供评分的完整首发名单
      * @param teamAgainst 提供防守评分的对手，必须具有可供评分的完整首发名单
      * @param extraTimeResult 为 true 时只生成 30 分钟加时赛新增进球，不包含常规时间比分
-     * @return 0～6 个进球；不修改球队或比赛记录，但会消耗共享随机源的状态
+     * @return 非负进球数，不设 6 球上限；不修改球队或比赛记录，但会消耗共享随机源的状态
      */
     public static int generateGoals(Team teamFor, Team teamAgainst, boolean extraTimeResult) {
-        double factor = (teamFor.offenseRating() - (double) teamAgainst.defenseRating() + 300) / 60.0;
-        return generateGoals(factor, extraTimeResult, Assets.random);
+        return generateGoals(teamFor, teamAgainst, extraTimeResult, MatchScoreSimulator.Venue.NEUTRAL);
     }
 
     /**
-     * 按攻防优势抽样，允许测试使用固定种子或指定随机序列复现比分边界。
+     * 根据赛事明确提供的场地身份生成单队比分，不从球队的数组下标推断主场优势。
      *
-     * @param factor 由球队攻防评分换算的有限档位值，超界时使用概率表的最近端点
-     * @param extraTimeResult 是否将整场分布折算为 30 分钟加时赛新增进球
-     * @param random 非空随机源，本方法会推进其状态
-     * @return 指定时段的单队进球数，不更新任何比赛记录
+     * @param teamFor 具有完整首发名单的进攻球队
+     * @param teamAgainst 具有完整首发名单的防守球队，包括守门位置上的实际首发球员
+     * @param extraTimeResult true 表示只生成 30 分钟加时赛新增进球，false 表示 90 分钟
+     * @param venue 本队的主场、客场或中立场身份，不能为 null
+     * @return 非负单队进球数；只推进共享随机源，不更新比赛记录
      */
-    static int generateGoals(double factor, boolean extraTimeResult, Random random) {
-        int[][] weights = Const.GOALS_WEIGHTS_BY_ATTACK_ADVANTAGE;
-        factor = Math.max(0, Math.min(weights.length - 1, factor));
-        int lower = (int) Math.floor(factor);
-        int upper = (int) Math.ceil(factor);
-        double fraction = factor - lower;
-        double draw = random.nextDouble() * 1000;
-        int lowerSum = 0;
-        int upperSum = 0;
-        int goals = weights[lower].length - 1;
-        for (int candidate = 0; candidate < weights[lower].length; candidate++) {
-            lowerSum += weights[lower][candidate];
-            upperSum += weights[upper][candidate];
-            // 插值累计权重与逐列插值等价，且末端严格为 1000，不把舍入误差转移给 6 球。
-            double cumulative = lowerSum + (upperSum - lowerSum) * fraction;
-            if (draw < cumulative) {
-                goals = candidate;
-                break;
-            }
-        }
-
-        if (!extraTimeResult) {
-            return goals;
-        }
-
-        // 假设进球速率不变，每球独立以 30/90 概率保留，使加时赛期望为整场的三分之一。
-        // 不能对抽出的进球数直接除以 3 取整，否则整场抽到 1、2 球时都会被抹去。
-        int extraTimeGoals = 0;
-        for (int goal = 0; goal < goals; goal++) {
-            if (random.nextDouble() < 1.0 / 3.0) {
-                extraTimeGoals++;
-            }
-        }
-        return extraTimeGoals;
+    public static int generateGoals(Team teamFor, Team teamAgainst, boolean extraTimeResult,
+                                    MatchScoreSimulator.Venue venue) {
+        return MatchScoreSimulator.generateGoals(teamFor, teamAgainst, extraTimeResult ? 30 : 90,
+            venue, Assets.random);
     }
 
     void updateAi() {

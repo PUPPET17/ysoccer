@@ -44,8 +44,8 @@ class PlayerStateTackle extends PlayerState {
                     hit = true;
 
                     if ((player.inputDevice.value)
-                        && (Math.abs((((player.a - player.inputDevice.angle + 540) % 360)) - 180) < 67.5)) {
-                        ball.a = player.inputDevice.angle;
+                        && (Math.abs((((player.a - player.inputAngle() + 540) % 360)) - 180) < 67.5)) {
+                        ball.a = player.inputAngle();
                     } else {
                         ball.a = player.a;
                     }
