@@ -63,6 +63,13 @@ report is written to `core/build/reports/goals-calibration.md`; the checked-in
 [calibration snapshot](docs/goals-calibration.md) records the initial parameter
 comparison, including the source squads and sampling assumptions.
 
+## Player AI and tactics
+
+The checked-in [Player AI and tactical-control audit](docs/player-ai-tactical-control-audit.md)
+documents the current finite-state AI, formation target tables, positioning and runs,
+passing and shooting selection, defending behavior, and the gaps that must be closed
+before natural-language touchline instructions can reliably affect a live match.
+
 ## Gradle
 
 This project uses [Gradle](https://gradle.org/) to manage dependencies.
